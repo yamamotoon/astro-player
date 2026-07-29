@@ -252,6 +252,9 @@ export class ARView {
   }
 
   private handleAbsolute = (e: DeviceOrientationEvent) => {
+    // alpha/beta/gammaが全てnullの場合、センサー非搭載機でも空のイベントが
+    // 一度だけ発火することがあるため「実データ無し」として無視する
+    if (e.alpha === null && e.beta === null && e.gamma === null) return
     if (!this.gyroReceived) { this.gyroReceived = true; this.manualMode = false; this.updateModeEl() }
     this.hasAbsolute = true
     this.alpha = e.alpha ?? 0
@@ -261,8 +264,9 @@ export class ARView {
 
   private handleOrientation = (e: DeviceOrientationEvent) => {
     if (this.hasAbsolute) return
-    if (!this.gyroReceived) { this.gyroReceived = true; this.manualMode = false; this.updateModeEl() }
     const wk = (e as DeviceOrientationEvent & { webkitCompassHeading?: number }).webkitCompassHeading
+    if (e.alpha === null && e.beta === null && e.gamma === null && wk == null) return
+    if (!this.gyroReceived) { this.gyroReceived = true; this.manualMode = false; this.updateModeEl() }
     this.alpha = wk != null ? (360 - wk) % 360 : (e.alpha ?? 0)
     this.beta  = e.beta  ?? 0
     this.gamma = e.gamma ?? 0

@@ -15,54 +15,77 @@
     </div>
   </header>
 
+  <nav class="top-nav" id="back-nav" hidden>
+    <button id="back-to-menu-btn" class="top-nav-link" data-i18n="nav-menu">☰ メニュー</button>
+  </nav>
+
   <main>
-    <section class="controls">
-      <div class="control-group">
-        <label data-i18n="location">場所</label>
-        <div class="location-inputs">
-          <span data-i18n="lat">緯度</span>
-          <input type="number" id="lat" value="35.6762" step="0.0001" min="-90" max="90">
-          <span data-i18n="lng">経度</span>
-          <input type="number" id="lng" value="139.6503" step="0.0001" min="-180" max="180">
-        </div>
-      </div>
-      <div class="control-group">
-        <label data-i18n="datetime">日時</label>
-        <input type="datetime-local" id="datetime">
-        <label class="realtime-label">
-          <input type="checkbox" id="realtime" checked>
-          <span data-i18n="realtime">リアルタイム更新</span>
-        </label>
-        <label class="realtime-label">
-          <input type="checkbox" id="show-constellations">
-          <span data-i18n="show-constellations">星座表示</span>
-        </label>
-        <label class="realtime-label">
-          <input type="checkbox" id="show-famous">
-          <span data-i18n="show-famous">有名な星座</span>
-        </label>
-        <label class="realtime-label">
-          <input type="checkbox" id="show-triangles">
-          <span data-i18n="show-triangles">大三角形</span>
-        </label>
-      </div>
+    <!-- メニュー シーン -->
+    <section id="scene-menu" class="menu-main">
+      <button id="menu-dashboard-btn" class="menu-card">
+        <span class="menu-card-icon">🪐</span>
+        <span class="menu-card-title" data-i18n="nav-dashboard">3D+2D</span>
+        <span class="menu-card-desc" data-i18n="menu-dashboard-desc">3D天球・2D方位図・天体情報</span>
+      </button>
+      <button id="menu-sky-btn" class="menu-card">
+        <span class="menu-card-icon">🔭</span>
+        <span class="menu-card-title" data-i18n="nav-sky">SKY</span>
+        <span class="menu-card-desc" data-i18n="menu-sky-desc">ジャイロで天球を見るARビュー</span>
+      </button>
     </section>
 
-    <section class="playback">
-      <button id="play-btn" class="play-btn" title="24時間シミュレーション 再生/停止" data-i18n-title="play-title">▶</button>
-      <span class="playback-label">24h sim</span>
-      <div class="seekbar-wrap">
-        <div class="seekbar-track-row">
-          <input type="range" id="seekbar" min="0" max="1439" value="0" class="seekbar">
+    <!-- 共有HUD（設定パネル・24hシークバー）: メニュー以外の全シーンで表示 -->
+    <section id="scene-hud" style="display: none">
+      <section class="controls">
+        <div class="control-group">
+          <label data-i18n="location">場所</label>
+          <div class="location-inputs">
+            <span data-i18n="lat">緯度</span>
+            <input type="number" id="lat" value="35.6762" step="0.0001" min="-90" max="90">
+            <span data-i18n="lng">経度</span>
+            <input type="number" id="lng" value="139.6503" step="0.0001" min="-180" max="180">
+          </div>
         </div>
-        <div class="seekbar-ticks">
-          <span>0h</span><span>3h</span><span>6h</span><span>9h</span><span>12h</span><span>15h</span><span>18h</span><span>21h</span><span>24h</span>
+        <div class="control-group">
+          <label data-i18n="datetime">日時</label>
+          <input type="datetime-local" id="datetime">
+          <label class="realtime-label">
+            <input type="checkbox" id="realtime" checked>
+            <span data-i18n="realtime">リアルタイム更新</span>
+          </label>
+          <span id="const-toggles">
+            <label class="realtime-label">
+              <input type="checkbox" id="show-constellations">
+              <span data-i18n="show-constellations">星座表示</span>
+            </label>
+            <label class="realtime-label">
+              <input type="checkbox" id="show-famous">
+              <span data-i18n="show-famous">有名な星座</span>
+            </label>
+            <label class="realtime-label">
+              <input type="checkbox" id="show-triangles">
+              <span data-i18n="show-triangles">大三角形</span>
+            </label>
+          </span>
         </div>
-      </div>
-      <button id="ar-btn" class="ar-btn" title="スカイビュー（ジャイロで天球内を見る）" data-i18n-title="ar-title" data-i18n="ar-btn-text">🔭空</button>
+      </section>
+
+      <section class="playback">
+        <button id="play-btn" class="play-btn" title="24時間シミュレーション 再生/停止" data-i18n-title="play-title">▶</button>
+        <span class="playback-label">24h sim</span>
+        <div class="seekbar-wrap">
+          <div class="seekbar-track-row">
+            <input type="range" id="seekbar" min="0" max="1439" value="0" class="seekbar">
+          </div>
+          <div class="seekbar-ticks">
+            <span>0h</span><span>3h</span><span>6h</span><span>9h</span><span>12h</span><span>15h</span><span>18h</span><span>21h</span><span>24h</span>
+          </div>
+        </div>
+      </section>
     </section>
 
-    <section class="views">
+    <!-- 3D+2D シーン -->
+    <section id="scene-dashboard" class="views" style="display: none">
       <div class="view-3d">
         <div class="view-title">
           <span data-i18n="view-3d">3D 天球</span>
@@ -93,14 +116,19 @@
           </table>
         </div>
       </div>
+    </section>
 
-      <!-- スカイビューパネル（views内を覆う） -->
-      <div id="ar-panel" class="ar-panel" hidden>
+    <!-- SKY シーン -->
+    <section id="scene-sky" class="sky-view" style="display: none">
+      <div class="view-title">
+        <span data-i18n="view-sky">SKY（ジャイロで天球内を見る）</span>
+        <button class="fullscreen-btn" data-target="skyview" title="フルスクリーン" data-i18n-title="fullscreen-title">⛶</button>
+      </div>
+      <div id="ar-panel" class="ar-panel">
         <video id="ar-video" hidden></video>
         <canvas id="ar-canvas" class="ar-canvas"></canvas>
         <div class="ar-hud">
           <span id="skyview-mode" class="skyview-mode"></span>
-          <button id="ar-close" class="ar-close" data-i18n="skyview-close">✕ スカイビュー終了</button>
         </div>
       </div>
     </section>

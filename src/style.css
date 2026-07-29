@@ -14,6 +14,14 @@ body {
   overflow: hidden;
 }
 
+main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-height: 0;
+}
+
 header {
   padding: 8px 16px;
   background: #0d0d2b;
@@ -35,6 +43,95 @@ header h1 {
   align-items: center;
   gap: 8px;
   flex-shrink: 0;
+}
+
+.top-nav {
+  display: flex;
+  gap: 6px;
+  padding: 6px 16px;
+  background: #08081f;
+  border-bottom: 1px solid #2a2a4a;
+  flex-shrink: 0;
+}
+
+.top-nav-link {
+  background: none;
+  color: #7080a0;
+  text-decoration: none;
+  font: inherit;
+  font-size: 0.82rem;
+  padding: 4px 14px;
+  border-radius: 5px;
+  border: 1px solid transparent;
+  cursor: pointer;
+}
+
+.top-nav-link:hover {
+  background: #1a1a40;
+  color: #a0c0ff;
+}
+
+/* ---- メニュー画面 ---- */
+.menu-main {
+  flex: 1;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: 24px;
+  flex-wrap: wrap;
+  padding: 24px;
+}
+
+.menu-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  width: 220px;
+  padding: 32px 20px;
+  background: #0d0d2b;
+  border: 1px solid #2a2a4a;
+  border-radius: 12px;
+  text-decoration: none;
+  color: #d0d0e8;
+  font: inherit;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.menu-card:hover {
+  background: #14143a;
+  border-color: #4a4a8a;
+}
+
+.menu-card-icon {
+  font-size: 2.6rem;
+  line-height: 1;
+}
+
+.menu-card-title {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #a0c0ff;
+}
+
+.menu-card-desc {
+  font-size: 0.8rem;
+  color: #7080a0;
+  text-align: center;
+}
+
+@media (max-width: 600px) {
+  .menu-main {
+    gap: 16px;
+    padding: 16px;
+  }
+  .menu-card {
+    width: 100%;
+    max-width: 320px;
+    padding: 24px 16px;
+  }
 }
 
 .lang-btn {
@@ -194,8 +291,9 @@ main:fullscreen .controls {
   display: none;
 }
 
-/* フルスクリーン時はviewsを拡張 */
-main:fullscreen .views {
+/* フルスクリーン時はviews/sky-viewを拡張 */
+main:fullscreen .views,
+main:fullscreen .sky-view {
   flex: 1;
   overflow: hidden;
 }
@@ -233,13 +331,12 @@ main[data-fs="view2d"]:fullscreen .info-panel {
   display: none;
 }
 
-/* スカイビューフルスクリーン: views全体をar-panelが覆う */
-main[data-fs="skyview"]:fullscreen .view-3d,
-main[data-fs="skyview"]:fullscreen .view-right {
-  display: none;
-}
-main[data-fs="skyview"]:fullscreen .ar-panel {
+.sky-view {
+  flex: 1;
   display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  position: relative;
 }
 
 #canvas3d {
@@ -358,36 +455,14 @@ main[data-fs="skyview"]:fullscreen .ar-panel {
   user-select: none;
 }
 
-/* AR ボタン */
-.ar-btn {
-  background: #1a3040;
-  border: 1px solid #2a5060;
-  color: #60c0e0;
-  padding: 3px 10px;
-  border-radius: 5px;
-  cursor: pointer;
-  font-size: 0.78rem;
-  white-space: nowrap;
-  flex-shrink: 0;
-}
-.ar-btn:hover { background: #243850; }
-
 /* AR パネル */
 .ar-panel {
-  position: absolute;
-  inset: 0;
-  z-index: 100;
+  flex: 1;
+  position: relative;
   background: #000;
   display: flex;
   flex-direction: column;
 }
-
-/* スカイビュー中もplaybackバーを最前面に */
-.skyview-active .playback {
-  position: relative;
-  z-index: 9500;
-}
-.ar-panel[hidden] { display: none; }
 
 .ar-video {
   position: absolute;
@@ -402,12 +477,12 @@ main[data-fs="skyview"]:fullscreen .ar-panel {
   inset: 0;
   width: 100%;
   height: 100%;
-  pointer-events: none;
+  touch-action: none;
 }
 
 .ar-hud {
   position: absolute;
-  bottom: 24px;
+  top: 12px;
   left: 0;
   right: 0;
   display: flex;
@@ -423,17 +498,6 @@ main[data-fs="skyview"]:fullscreen .ar-panel {
   background: rgba(0,0,20,0.6);
   padding: 2px 10px;
   border-radius: 10px;
-}
-
-.ar-close {
-  pointer-events: auto;
-  background: rgba(0,0,0,0.55);
-  border: 1px solid rgba(255,255,255,0.3);
-  color: #ffffff;
-  padding: 8px 28px;
-  border-radius: 24px;
-  font-size: 0.95rem;
-  cursor: pointer;
 }
 
 /* ---- モバイル対応 (portrait / 幅600px以下) ---- */

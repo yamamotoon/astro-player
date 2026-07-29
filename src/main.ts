@@ -5,6 +5,8 @@ import { Compass2D } from './compass2d'
 import { getAstroData, formatTime } from './astroCalc'
 import { ARView } from './ar'
 
+type SceneName = 'menu' | 'dashboard' | 'sky'
+
 const latInput = document.getElementById('lat') as HTMLInputElement
 const lngInput = document.getElementById('lng') as HTMLInputElement
 const datetimeInput = document.getElementById('datetime') as HTMLInputElement
@@ -26,12 +28,7 @@ const scene3d = new Scene3D(canvas3d)
 const canvas2d = document.getElementById('canvas2d') as HTMLCanvasElement
 const compass2d = new Compass2D(canvas2d)
 
-// ---- AR (update()より前に初期化が必要) ----
-const arPanel = document.getElementById('ar-panel') as HTMLDivElement
-const arVideo = document.getElementById('ar-video') as HTMLVideoElement
 const arCanvas = document.getElementById('ar-canvas') as HTMLCanvasElement
-const arBtn = document.getElementById('ar-btn') as HTMLButtonElement
-const arClose = document.getElementById('ar-close') as HTMLButtonElement
 const arView = new ARView(arCanvas)
 
 function getSettings() {
@@ -45,6 +42,41 @@ function setText(id: string, value: string) {
   const el = document.getElementById(id)
   if (el) el.textContent = value
 }
+
+// ---- シーン切り替え（メニュー / 3D+2D / SKY） ----
+const sceneMenu = document.getElementById('scene-menu') as HTMLElement
+const sceneHud = document.getElementById('scene-hud') as HTMLElement
+const sceneDashboard = document.getElementById('scene-dashboard') as HTMLElement
+const sceneSky = document.getElementById('scene-sky') as HTMLElement
+const constToggles = document.getElementById('const-toggles') as HTMLElement
+const backNav = document.getElementById('back-nav') as HTMLElement
+const backToMenuBtn = document.getElementById('back-to-menu-btn') as HTMLButtonElement
+const menuDashboardBtn = document.getElementById('menu-dashboard-btn') as HTMLButtonElement
+const menuSkyBtn = document.getElementById('menu-sky-btn') as HTMLButtonElement
+
+function showScene(name: SceneName) {
+  sceneMenu.style.display = name === 'menu' ? '' : 'none'
+  sceneHud.style.display = name === 'menu' ? 'none' : ''
+  sceneDashboard.style.display = name === 'dashboard' ? '' : 'none'
+  sceneSky.style.display = name === 'sky' ? '' : 'none'
+  constToggles.style.display = name === 'dashboard' ? '' : 'none'
+  backNav.hidden = name === 'menu'
+  if (name !== 'sky') arView.stop()
+  if (document.fullscreenElement) document.exitFullscreen()
+  if (name === 'dashboard') {
+    // 非表示中はサイズ0で解像度が決まらないため、表示直後に再計算する
+    requestAnimationFrame(() => scene3d.handleResize())
+  }
+}
+
+menuDashboardBtn.addEventListener('click', () => showScene('dashboard'))
+menuSkyBtn.addEventListener('click', () => {
+  // ジェスチャーを保持したまま同じクリックハンドラ内で開始する
+  // （iOS Safariのジャイロ許可はユーザー操作から直接呼ばないと通らないため）
+  showScene('sky')
+  arView.start(arCanvas)
+})
+backToMenuBtn.addEventListener('click', () => showScene('menu'))
 
 // ---- 24時間シミュレーション（状態変数・DOM参照）----
 const langBtn = document.getElementById('lang-btn') as HTMLButtonElement
@@ -71,6 +103,7 @@ function update() {
   const data = getAstroData(date, lat, lng)
   scene3d.update(data)
   compass2d.draw(data)
+  arView.setData(data, lat, lng, date)
 
   setText('sun-az', `${data.sun.azimuthDeg.toFixed(1)}°`)
   setText('sun-alt', `${data.sun.altitudeDeg.toFixed(1)}°`)
@@ -90,8 +123,6 @@ function update() {
   if (trianglesCheck.checked) {
     scene3d.updateTriangles(lat, lng, date)
   }
-
-  arView.setData(data, lat, lng, date)
 }
 
 latInput.addEventListener('input', update)
@@ -153,11 +184,6 @@ document.querySelectorAll<HTMLButtonElement>('.fullscreen-btn').forEach(btn => {
 
 document.addEventListener('fullscreenchange', () => {
   if (!document.fullscreenElement) {
-    // スカイビューフルスクリーン終了時も後片付け
-    if (mainEl.dataset.fs === 'skyview') {
-      arView.stop()
-      arPanel.hidden = true
-    }
     delete mainEl.dataset.fs
     document.querySelectorAll<HTMLButtonElement>('.fullscreen-btn').forEach(b => {
       b.textContent = '⛶'
@@ -167,25 +193,6 @@ document.addEventListener('fullscreenchange', () => {
     // フルスクリーン直後にThree.jsをリサイズ
     requestAnimationFrame(() => scene3d.handleResize())
   }
-})
-
-arBtn.addEventListener('click', async () => {
-  mainEl.dataset.fs = 'skyview'
-  arPanel.hidden = false
-  const ok = await arView.start(arCanvas)
-  if (!ok) {
-    arPanel.hidden = true
-    delete mainEl.dataset.fs
-    return
-  }
-  mainEl.requestFullscreen().catch(() => {})
-})
-
-arClose.addEventListener('click', () => {
-  arView.stop()
-  arPanel.hidden = true
-  delete mainEl.dataset.fs
-  if (document.fullscreenElement) document.exitFullscreen()
 })
 
 // ---- 設定パネル 折りたたみ ----
