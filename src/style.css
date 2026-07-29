@@ -1,0 +1,669 @@
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: 'Segoe UI', sans-serif;
+  background: #05051a;
+  color: #d0d0e8;
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+header {
+  padding: 8px 16px;
+  background: #0d0d2b;
+  border-bottom: 1px solid #2a2a4a;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+header h1 {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #a0c0ff;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.lang-btn {
+  background: #1a1a40;
+  border: 1px solid #4a4a8a;
+  color: #a0b0e0;
+  padding: 3px 10px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.lang-btn:hover {
+  background: #2a2a60;
+  color: #c0d0ff;
+}
+
+.toggle-controls {
+  display: none; /* デスクトップでは非表示 */
+  background: #1a1a40;
+  border: 1px solid #2a2a4a;
+  color: #7080a0;
+  padding: 3px 10px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.controls {
+  display: flex;
+  gap: 16px;
+  padding: 6px 16px;
+  background: #0d0d2b;
+  border-bottom: 1px solid #2a2a4a;
+  align-items: center;
+  flex-wrap: wrap;
+  flex-shrink: 0;
+}
+
+.control-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.control-group > label {
+  font-size: 0.8rem;
+  color: #7080a0;
+  white-space: nowrap;
+}
+
+.location-inputs {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.location-inputs span {
+  font-size: 0.78rem;
+  color: #7080a0;
+}
+
+input[type="number"],
+input[type="datetime-local"] {
+  background: #12122e;
+  border: 1px solid #2a2a4a;
+  color: #d0d0e8;
+  padding: 3px 7px;
+  border-radius: 4px;
+  font-size: 0.82rem;
+}
+
+input[type="number"] {
+  width: 96px;
+}
+
+.realtime-label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.8rem;
+  color: #7080a0;
+  cursor: pointer;
+}
+
+.views {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+}
+
+.view-3d {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  position: relative;
+}
+
+.view-right {
+  width: 300px;
+  display: flex;
+  flex-direction: column;
+  border-left: 1px solid #2a2a4a;
+  flex-shrink: 0;
+}
+
+.view-title {
+  font-size: 0.78rem;
+  color: #7080a0;
+  padding: 5px 10px;
+  background: #0d0d2b;
+  border-bottom: 1px solid #2a2a4a;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.fullscreen-btn {
+  background: none;
+  border: 1px solid #2a2a4a;
+  color: #5070a0;
+  width: 22px;
+  height: 22px;
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 0.75rem;
+  line-height: 1;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.fullscreen-btn:hover {
+  background: #1a2a4a;
+  color: #a0c0ff;
+}
+
+/* フルスクリーン中のスタイル */
+main:fullscreen {
+  display: flex;
+  flex-direction: column;
+  background: #05051a;
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* フルスクリーン時は設定パネルを非表示 */
+main:fullscreen .controls {
+  display: none;
+}
+
+/* フルスクリーン時はviewsを拡張 */
+main:fullscreen .views {
+  flex: 1;
+  overflow: hidden;
+}
+
+/* 3Dフルスクリーン: view-rightを非表示 */
+main[data-fs="view3d"]:fullscreen .view-right {
+  display: none;
+}
+main[data-fs="view3d"]:fullscreen .view-3d {
+  flex: 1;
+}
+
+/* 2Dフルスクリーン: view-3dを非表示、view-rightをフル幅 */
+main[data-fs="view2d"]:fullscreen .view-3d {
+  display: none;
+}
+main[data-fs="view2d"]:fullscreen .view-right {
+  width: 100%;
+  border-left: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+main[data-fs="view2d"]:fullscreen .view-2d {
+  flex: 1;
+  border-bottom: none;
+  align-items: center;
+  justify-content: center;
+}
+main[data-fs="view2d"]:fullscreen #canvas2d {
+  width: min(80vh, 80vw) !important;
+  height: min(80vh, 80vw) !important;
+}
+main[data-fs="view2d"]:fullscreen .info-panel {
+  display: none;
+}
+
+/* スカイビューフルスクリーン: views全体をar-panelが覆う */
+main[data-fs="skyview"]:fullscreen .view-3d,
+main[data-fs="skyview"]:fullscreen .view-right {
+  display: none;
+}
+main[data-fs="skyview"]:fullscreen .ar-panel {
+  display: flex;
+}
+
+#canvas3d {
+  flex: 1;
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.view-2d {
+  border-bottom: 1px solid #2a2a4a;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-bottom: 8px;
+  flex-shrink: 0;
+}
+
+#canvas2d {
+  margin-top: 6px;
+}
+
+.info-panel {
+  flex: 1;
+  overflow-y: auto;
+}
+
+#info-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+}
+
+#info-table th,
+#info-table td {
+  padding: 5px 10px;
+  border-bottom: 1px solid #1a1a38;
+  text-align: left;
+}
+
+#info-table th {
+  color: #7080a0;
+  background: #0d0d2b;
+  font-weight: normal;
+}
+
+#info-table td:first-child {
+  color: #7080a0;
+}
+
+/* ---- 24時間シミュレーション バー ---- */
+.playback {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 16px;
+  background: #0a0a24;
+  border-bottom: 1px solid #2a2a4a;
+  flex-shrink: 0;
+}
+
+.play-btn {
+  background: #1e3a6e;
+  border: 1px solid #3a5a9e;
+  color: #a0c0ff;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 0.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  padding: 0;
+  line-height: 1;
+}
+
+.play-btn:hover {
+  background: #2a4a8e;
+}
+
+.playback-label {
+  font-size: 0.72rem;
+  color: #506080;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.seekbar-wrap {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.seekbar-track-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.seekbar {
+  flex: 1;
+  accent-color: #4070c0;
+  cursor: pointer;
+  height: 4px;
+}
+
+.seekbar-ticks {
+  display: flex;
+  justify-content: space-between;
+  padding: 0 2px;
+  font-size: 0.64rem;
+  color: #506080;
+  user-select: none;
+}
+
+/* AR ボタン */
+.ar-btn {
+  background: #1a3040;
+  border: 1px solid #2a5060;
+  color: #60c0e0;
+  padding: 3px 10px;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 0.78rem;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.ar-btn:hover { background: #243850; }
+
+/* AR パネル */
+.ar-panel {
+  position: absolute;
+  inset: 0;
+  z-index: 100;
+  background: #000;
+  display: flex;
+  flex-direction: column;
+}
+
+/* スカイビュー中もplaybackバーを最前面に */
+.skyview-active .playback {
+  position: relative;
+  z-index: 9500;
+}
+.ar-panel[hidden] { display: none; }
+
+.ar-video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.ar-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.ar-hud {
+  position: absolute;
+  bottom: 24px;
+  left: 0;
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  pointer-events: none;
+}
+
+.skyview-mode {
+  font-size: 0.8rem;
+  color: #aaccff;
+  background: rgba(0,0,20,0.6);
+  padding: 2px 10px;
+  border-radius: 10px;
+}
+
+.ar-close {
+  pointer-events: auto;
+  background: rgba(0,0,0,0.55);
+  border: 1px solid rgba(255,255,255,0.3);
+  color: #ffffff;
+  padding: 8px 28px;
+  border-radius: 24px;
+  font-size: 0.95rem;
+  cursor: pointer;
+}
+
+/* ---- モバイル対応 (portrait / 幅600px以下) ---- */
+@media (max-width: 600px) {
+  body {
+    height: auto;
+    min-height: 100dvh;
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+
+  header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 12px;
+  }
+
+  header h1 {
+    font-size: 0.82rem;
+  }
+
+  .toggle-controls {
+    display: block;
+  }
+
+  /* 設定の折りたたみ */
+  .controls {
+    overflow: hidden;
+    max-height: 300px;
+    transition: max-height 0.25s ease, padding 0.25s ease;
+    padding: 6px 12px;
+  }
+
+  .controls.collapsed {
+    max-height: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+  }
+
+  .control-group {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  input[type="number"] {
+    width: 80px;
+    font-size: 0.9rem;
+    padding: 5px 6px;
+  }
+
+  input[type="datetime-local"] {
+    font-size: 0.9rem;
+    padding: 5px 6px;
+  }
+
+  .realtime-label {
+    font-size: 0.85rem;
+  }
+
+  .playback {
+    padding: 5px 10px;
+    gap: 8px;
+  }
+
+  .play-btn {
+    width: 36px;
+    height: 36px;
+    font-size: 0.9rem;
+  }
+
+  /* views: 縦スクロール */
+  .views {
+    flex-direction: column;
+    overflow: visible;
+    flex: none;
+  }
+
+  /* 3D天球: 画面幅いっぱい・高さを大きく */
+  .view-3d {
+    flex: none;
+    height: 90vw;
+    max-height: 420px;
+    width: 100%;
+  }
+
+  /* view-right: 縦積み・フル幅 */
+  .view-right {
+    width: 100%;
+    border-left: none;
+    border-top: 1px solid #2a2a4a;
+    flex-direction: column;
+  }
+
+  /* 2D方位図: 大きく */
+  .view-2d {
+    border-right: none;
+    border-bottom: 1px solid #2a2a4a;
+    align-items: center;
+    flex-shrink: 0;
+  }
+
+  #canvas2d {
+    width: min(280px, 80vw);
+    height: min(280px, 80vw);
+    margin-top: 6px;
+    margin-bottom: 6px;
+  }
+
+  .info-panel {
+    overflow-y: visible;
+  }
+
+  #info-table th,
+  #info-table td {
+    padding: 6px 10px;
+    font-size: 0.82rem;
+  }
+}
+
+@media (max-width: 600px) and (orientation: landscape) {
+  .view-3d {
+    height: 55vw;
+    max-height: 300px;
+  }
+}
+
+/* ---- モバイル横向き (landscape on phone: 幅>600px かつ 高さ<=500px) ---- */
+@media (orientation: landscape) and (max-height: 500px) {
+  body {
+    height: auto;
+    min-height: 100dvh;
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+
+  header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 4px 12px;
+  }
+
+  header h1 {
+    font-size: 0.82rem;
+  }
+
+  .toggle-controls {
+    display: block;
+  }
+
+  .controls {
+    overflow: hidden;
+    max-height: 220px;
+    transition: max-height 0.25s ease, padding 0.25s ease;
+    padding: 5px 12px;
+    flex-wrap: wrap;
+  }
+
+  .controls.collapsed {
+    max-height: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+  }
+
+  .control-group {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  input[type="number"] {
+    width: 80px;
+    font-size: 0.9rem;
+    padding: 4px 6px;
+  }
+
+  input[type="datetime-local"] {
+    font-size: 0.9rem;
+    padding: 4px 6px;
+  }
+
+  .realtime-label {
+    font-size: 0.82rem;
+  }
+
+  .playback {
+    padding: 4px 12px;
+    gap: 8px;
+  }
+
+  /* 横向きは左右並び維持 */
+  .views {
+    flex-direction: row;
+    overflow: visible;
+    flex: none;
+  }
+
+  .view-3d {
+    flex: 1;
+    height: calc(100vw * 0.55);
+    max-height: 340px;
+    min-height: 160px;
+  }
+
+  .view-right {
+    width: 260px;
+    border-left: 1px solid #2a2a4a;
+    flex-direction: column;
+    flex-shrink: 0;
+  }
+
+  .view-2d {
+    border-bottom: 1px solid #2a2a4a;
+    align-items: center;
+  }
+
+  #canvas2d {
+    width: 160px;
+    height: 160px;
+    margin: 4px 0;
+  }
+
+  .info-panel {
+    overflow-y: auto;
+    flex: 1;
+  }
+
+  #info-table th,
+  #info-table td {
+    padding: 4px 8px;
+    font-size: 0.78rem;
+  }
+}
