@@ -46,6 +46,7 @@ function setText(id: string, value: string) {
 // ---- シーン切り替え（メニュー / 3D+2D / SKY） ----
 const sceneMenu = document.getElementById('scene-menu') as HTMLElement
 const sceneHud = document.getElementById('scene-hud') as HTMLElement
+const scenePlayback = document.getElementById('scene-playback') as HTMLElement
 const sceneDashboard = document.getElementById('scene-dashboard') as HTMLElement
 const sceneSky = document.getElementById('scene-sky') as HTMLElement
 const constToggles = document.getElementById('const-toggles') as HTMLElement
@@ -57,6 +58,7 @@ const menuSkyBtn = document.getElementById('menu-sky-btn') as HTMLButtonElement
 function showScene(name: SceneName) {
   sceneMenu.style.display = name === 'menu' ? '' : 'none'
   sceneHud.style.display = name === 'menu' ? 'none' : ''
+  scenePlayback.style.display = name === 'menu' ? 'none' : ''
   sceneDashboard.style.display = name === 'dashboard' ? '' : 'none'
   sceneSky.style.display = name === 'sky' ? '' : 'none'
   constToggles.style.display = name === 'dashboard' ? '' : 'none'

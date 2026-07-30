@@ -142,7 +142,7 @@ export const ZODIAC_CONSTELLATIONS: readonly ConstellationDef[] = [
 // ---- 有名な星座・北極星 ----
 
 export const FAMOUS_CONSTELLATIONS: readonly ConstellationDef[] = [
-  { nameJa: '北極星 ★',   nameEn: 'Polaris ★',
+  { nameJa: '北極星',   nameEn: 'Polaris',
     stars: [[37.95, 89.26]],
     lines: [] },
   { nameJa: 'オリオン座',  nameEn: 'Orion',
@@ -182,8 +182,8 @@ export const FAMOUS_CONSTELLATIONS: readonly ConstellationDef[] = [
   { nameJa: 'こぐま座',    nameEn: 'Ursa Minor',
     // 0:Polaris(α) 1:δ 2:ε 3:ζ 4:η 5:Kochab(β) 6:Pherkad(γ)
     stars: [
-      [37.95,89.26],[259.00,86.59],[261.06,82.03],[211.10,77.00],
-      [236.55,74.16],[222.68,74.16],[230.18,71.83],
+      [37.95,89.26],[263.05,86.59],[251.49,82.04],[236.02,77.79],
+      [244.38,75.76],[222.68,74.16],[230.18,71.83],
     ],
     lines: [[0,1],[1,2],[2,3],[3,4],[4,5],[5,6],[6,3]] },
 ]

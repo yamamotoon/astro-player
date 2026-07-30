@@ -51,7 +51,7 @@ export class ARView {
     this.renderer.setPixelRatio(window.devicePixelRatio)
     this.renderer.setClearColor(0x02020f)
     this.scene = new THREE.Scene()
-    this.camera = new THREE.PerspectiveCamera(70, 1, 0.1, 100)
+    this.camera = new THREE.PerspectiveCamera(60, 1, 0.1, 100)
     this.camera.position.set(0, 0, 0)
 
     this.buildStars()

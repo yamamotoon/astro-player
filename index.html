@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>StarCanvas Hoshizora - 太陽・月位置シミュレーター</title>
   <link rel="stylesheet" href="/src/style.css">
 </head>
@@ -34,7 +34,7 @@
       </button>
     </section>
 
-    <!-- 共有HUD（設定パネル・24hシークバー）: メニュー以外の全シーンで表示 -->
+    <!-- 共有の設定パネル: メニュー以外の全シーンで表示 -->
     <section id="scene-hud" style="display: none">
       <section class="controls">
         <div class="control-group">
@@ -67,19 +67,6 @@
               <span data-i18n="show-triangles">大三角形</span>
             </label>
           </span>
-        </div>
-      </section>
-
-      <section class="playback">
-        <button id="play-btn" class="play-btn" title="24時間シミュレーション 再生/停止" data-i18n-title="play-title">▶</button>
-        <span class="playback-label">24h sim</span>
-        <div class="seekbar-wrap">
-          <div class="seekbar-track-row">
-            <input type="range" id="seekbar" min="0" max="1439" value="0" class="seekbar">
-          </div>
-          <div class="seekbar-ticks">
-            <span>0h</span><span>3h</span><span>6h</span><span>9h</span><span>12h</span><span>15h</span><span>18h</span><span>21h</span><span>24h</span>
-          </div>
         </div>
       </section>
     </section>
@@ -129,6 +116,20 @@
         <canvas id="ar-canvas" class="ar-canvas"></canvas>
         <div class="ar-hud">
           <span id="skyview-mode" class="skyview-mode"></span>
+        </div>
+      </div>
+    </section>
+
+    <!-- 24hシークバー: 画面下部・メニュー以外の全シーンで表示（スマホでの片手操作用） -->
+    <section id="scene-playback" class="playback" style="display: none">
+      <button id="play-btn" class="play-btn" title="24時間シミュレーション 再生/停止" data-i18n-title="play-title">▶</button>
+      <span class="playback-label">24h sim</span>
+      <div class="seekbar-wrap">
+        <div class="seekbar-track-row">
+          <input type="range" id="seekbar" min="0" max="1439" value="0" class="seekbar">
+        </div>
+        <div class="seekbar-ticks">
+          <span>0h</span><span>3h</span><span>6h</span><span>9h</span><span>12h</span><span>15h</span><span>18h</span><span>21h</span><span>24h</span>
         </div>
       </div>
     </section>

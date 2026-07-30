@@ -387,14 +387,15 @@ main[data-fs="view2d"]:fullscreen .info-panel {
   color: #7080a0;
 }
 
-/* ---- 24時間シミュレーション バー ---- */
+/* ---- 24時間シミュレーション バー（画面下部固定・親指操作用） ---- */
 .playback {
   display: flex;
   align-items: center;
   gap: 10px;
   padding: 5px 16px;
+  padding-bottom: max(5px, env(safe-area-inset-bottom));
   background: #0a0a24;
-  border-bottom: 1px solid #2a2a4a;
+  border-top: 1px solid #2a2a4a;
   flex-shrink: 0;
 }
 
