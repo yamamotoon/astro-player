@@ -58,13 +58,14 @@ export class ARView {
     this.constGroup = new THREE.Group()
     this.scene.add(this.constGroup)
 
-    const sunGeo = new THREE.SphereGeometry(0.35, 16, 16)
+    // 実物の見た目の角直径(約0.5°)に合わせたサイズ（R=9換算で半径≒0.04）
+    const sunGeo = new THREE.SphereGeometry(0.04, 16, 16)
     this.sunMesh = new THREE.Mesh(sunGeo, new THREE.MeshBasicMaterial({ color: 0xffee44 }))
     this.scene.add(this.sunMesh)
     this.sunLabel = this.makeLabel(t('label-sun'), '#ffee44')
     this.scene.add(this.sunLabel)
 
-    const moonGeo = new THREE.SphereGeometry(0.22, 16, 16)
+    const moonGeo = new THREE.SphereGeometry(0.04, 16, 16)
     this.moonMesh = new THREE.Mesh(moonGeo, new THREE.MeshBasicMaterial({ color: 0xccd4ee }))
     this.scene.add(this.moonMesh)
     this.moonLabel = this.makeLabel(t('label-moon'), '#ccd4ee')
@@ -191,14 +192,14 @@ export class ARView {
   setData(data: AstroData, lat?: number, lng?: number, date?: Date) {
     const [sx, sy, sz] = positionToXYZ(data.sun.azimuthRad, data.sun.altitudeRad, R)
     this.sunMesh.position.set(sx, sy, sz)
-    this.sunLabel.position.set(sx, sy + 0.5, sz)
+    this.sunLabel.position.set(sx, sy + 0.15, sz)
     const sm = this.sunMesh.material as THREE.MeshBasicMaterial
     sm.opacity = data.sun.altitudeRad < 0 ? 0.3 : 1.0
     sm.transparent = data.sun.altitudeRad < 0
 
     const [mx, my, mz] = positionToXYZ(data.moon.azimuthRad, data.moon.altitudeRad, R)
     this.moonMesh.position.set(mx, my, mz)
-    this.moonLabel.position.set(mx, my + 0.38, mz)
+    this.moonLabel.position.set(mx, my + 0.13, mz)
     const mm = this.moonMesh.material as THREE.MeshBasicMaterial
     mm.opacity = data.moon.altitudeRad < 0 ? 0.3 : 1.0
     mm.transparent = data.moon.altitudeRad < 0
@@ -360,6 +361,11 @@ export class ARView {
     if (w === 0 || h === 0) return
     this.renderer.setSize(w, h, false)
     this.camera.aspect = w / h
+    this.camera.updateProjectionMatrix()
+  }
+
+  setFov(fovDeg: number) {
+    this.camera.fov = fovDeg
     this.camera.updateProjectionMatrix()
   }
 }

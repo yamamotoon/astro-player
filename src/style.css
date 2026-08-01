@@ -501,6 +501,27 @@ main[data-fs="view2d"]:fullscreen .info-panel {
   border-radius: 10px;
 }
 
+/* ズームスライダー（縦・画面右側にオーバーレイ）。上=望遠(FOV小)/下=広角(FOV大) */
+.zoom-slider-wrap {
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 40px;
+  height: 180px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: auto;
+}
+
+.zoom-slider {
+  width: 180px;
+  transform: rotate(90deg);
+  accent-color: #4070c0;
+  cursor: pointer;
+}
+
 /* ---- モバイル対応 (portrait / 幅600px以下) ---- */
 @media (max-width: 600px) {
   body {

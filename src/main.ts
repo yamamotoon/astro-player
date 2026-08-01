@@ -31,6 +31,11 @@ const compass2d = new Compass2D(canvas2d)
 const arCanvas = document.getElementById('ar-canvas') as HTMLCanvasElement
 const arView = new ARView(arCanvas)
 
+const zoomSlider = document.getElementById('zoom-slider') as HTMLInputElement
+zoomSlider.addEventListener('input', () => {
+  arView.setFov(parseFloat(zoomSlider.value))
+})
+
 function getSettings() {
   const lat = parseFloat(latInput.value) || 35.6762
   const lng = parseFloat(lngInput.value) || 139.6503
