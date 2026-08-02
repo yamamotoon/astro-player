@@ -32,6 +32,11 @@
         <span class="menu-card-title" data-i18n="nav-sky">SKY</span>
         <span class="menu-card-desc" data-i18n="menu-sky-desc">ジャイロで天球を見るARビュー</span>
       </button>
+      <button id="menu-scale-btn" class="menu-card">
+        <span class="menu-card-icon">🌍</span>
+        <span class="menu-card-title" data-i18n="nav-scale">スケール</span>
+        <span class="menu-card-desc" data-i18n="menu-scale-desc">地球・月・太陽の距離と大きさを正確に再現</span>
+      </button>
     </section>
 
     <!-- 共有の設定パネル: メニュー以外の全シーンで表示 -->
@@ -120,6 +125,24 @@
         <div class="zoom-slider-wrap">
           <input type="range" id="zoom-slider" class="zoom-slider" min="10" max="70" value="60" step="1">
         </div>
+      </div>
+    </section>
+
+    <!-- スケールモデル シーン（独立画面。設定パネル・シークバーは使わない） -->
+    <section id="scene-scale" class="scale-view" style="display: none">
+      <div class="view-title">
+        <span data-i18n="view-scale">スケールモデル（距離・大きさを正確に再現）</span>
+        <div class="view-title-actions">
+          <button id="scale-select-btn" class="fullscreen-btn" title="矩形選択モード" data-i18n-title="scale-select-title">⬚</button>
+          <button id="scale-fit-btn" class="fullscreen-btn" title="全体を表示 (Home)" data-i18n-title="scale-fit-title">🏠</button>
+          <button class="fullscreen-btn" data-target="scale" title="フルスクリーン" data-i18n-title="fullscreen-title">⛶</button>
+        </div>
+      </div>
+      <div class="scale-canvas-wrap">
+        <canvas id="canvas-scale"></canvas>
+        <div id="scale-select-box" class="scale-select-box" hidden></div>
+        <pre id="scale-debug-hud" class="scale-debug-hud"></pre>
+        <canvas id="scale-angle-gizmo" class="scale-angle-gizmo" width="96" height="96"></canvas>
       </div>
     </section>
 

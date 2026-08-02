@@ -15,21 +15,30 @@ npm run preview  # ビルド結果のプレビュー
 ## アーキテクチャ
 
 SPA構成（1つの `index.html` / `main.ts`）。画面遷移は実際のページ遷移ではなく、`main.ts` の
-`showScene('menu' | 'dashboard' | 'sky')` によるシーンの表示切替（DOM要素の `display` 切替）で行う。
+`showScene('menu' | 'dashboard' | 'sky' | 'scale')` によるシーンの表示切替（DOM要素の `display` 切替）で行う。
 
 ```
 main.ts
-  ├── showScene()   : メニュー / 3D+2D / SKY のシーン切り替え・共有HUDの表示制御
-  ├── scene3d.ts    : Three.js 3D天球シーン管理（星座・大三角形の描画・表示切替）
-  ├── compass2d.ts  : HTML Canvas 2D方位図描画
-  ├── ar.ts         : ジャイロ/手動操作のARスカイビュー（星座常時描画・ジャイロ→手動フォールバック）
-  ├── astroCalc.ts  : SunCalc → 方位角/高度角/出入り時刻の計算
-  │                   RA/Dec→Alt/Az 変換 (raDecToAltAz)
-  │                   星座データ (ZODIAC_CONSTELLATIONS / FAMOUS_CONSTELLATIONS / BIG_TRIANGLES)
-  └── i18n.ts       : 日本語/英語の文言テーブルと data-i18n 適用
+  ├── showScene()       : メニュー / 3D+2D / SKY / スケールモデル のシーン切り替え・共有HUDの表示制御
+  ├── scene3d.ts        : Three.js 3D天球シーン管理（星座・大三角形の描画・表示切替、観測者視点）
+  ├── compass2d.ts      : HTML Canvas 2D方位図描画
+  ├── ar.ts             : ジャイロ/手動操作のARスカイビュー（星座常時描画・ジャイロ→手動フォールバック）
+  ├── scaleModel3d.ts   : 地球・月・太陽の距離/大きさを実際の比率で正確に再現する比較用3Dモデル
+  │                       （星座は含まない。scene3d.tsとは独立した別モード）
+  ├── astroCalc.ts      : SunCalc → 方位角/高度角/出入り時刻の計算
+  │                       RA/Dec→Alt/Az 変換 (raDecToAltAz)
+  │                       星座データ (ZODIAC_CONSTELLATIONS / FAMOUS_CONSTELLATIONS / BIG_TRIANGLES)
+  └── i18n.ts           : 日本語/英語の文言テーブルと data-i18n 適用
 ```
 
-設定パネル・24hシークバー（`#scene-hud`）は3シーン共通の1インスタンスで、メニュー以外の全シーンで表示される。
+設定パネル・24hシークバー（`#scene-hud`/`#scene-playback`）は3D+2D・SKYの2シーン共通の1インスタンスで、
+それ以外（メニュー・スケールモデル）では非表示になる。スケールモデルは緯度経度・日時に依存しない
+独立画面（カメラ操作のみ）のため、HUDを使わない。
+
+**スケールモデルの単位系**: `scaleModel3d.ts` は月半径=1になるよう、実際の物理値(km)から比率を算出する
+（ハードコードしない）。月半径1のとき、地球半径≒3.67・太陽半径≒400.7・地球〜月距離≒221.3・
+地球〜太陽距離≒86,125。距離比が非常に大きいため、月規模〜太陽規模の行き来はOrbitControlsのズームで行う
+（`minDistance`/`maxDistance`を広く設定）。v1では地球・月の配置は簡易的な固定角度（軌道運動は未実装）。
 
 **SKY開始のジェスチャー保持に注意**: iOS Safari は `DeviceOrientationEvent.requestPermission()` を
 ユーザー操作（クリック等）のイベントハンドラから直接呼び出した場合しか許可を出さない。ページ遷移を挟むと
