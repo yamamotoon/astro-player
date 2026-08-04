@@ -49,10 +49,21 @@ export class ScaleModel3D {
   private earthLabel: THREE.Sprite
   private moonLabel: THREE.Sprite
 
+  // 各ラベルのcanvas(256x64)全体に対する、実際に描画された文字の大きさの比率
+  // （ctx.measureText()で実測。当たり判定・引き出し線の距離計算に使う。updateLabels()参照）
+  private sunLabelFrac = { halfWFrac: 1, halfHFrac: 1 }
+  private earthLabelFrac = { halfWFrac: 1, halfHFrac: 1 }
+  private moonLabelFrac = { halfWFrac: 1, halfHFrac: 1 }
+
   // 天体の実座標とラベル位置の関係が分かるよう結ぶ引き出し線
   private sunLeader: THREE.Line
   private earthLeader: THREE.Line
   private moonLeader: THREE.Line
+
+  // デバッグ用: 当たり判定・引き出し線の距離計算に実際に使っている「ラベルのサイズ」
+  // (textHalfWs/textHalfHs、ctx.measureText()の実測値)を枠線で可視化する。
+  // ScaleModel3D.DEBUG_SHOW_LABEL_SIZE を切り替えるだけでON/OFFできる
+  private debugLabelSizeBoxes: THREE.LineLoop[] = []
 
   // カメラ情報の常時表示UI（テキスト）
   private debugHudEl = document.getElementById('scale-debug-hud')
@@ -159,20 +170,43 @@ export class ScaleModel3D {
     //   位置ズレがほぼ消えてしまう＝天体が小さくなるほど位置が分からなくなり、目的に反するため、
     //   毎フレーム「カメラからの距離」に応じて再計算する。updateLabels()参照）
     // 3天体が画面上で近接しても重ならないよう、天体ごとに異なる方向へオフセットする
-    this.sunLabel = this.makeLabel(t('label-sun'), '#ffee44')
+    const sunLabelInfo = this.makeLabel(t('label-sun'), '#ffee44')
+    this.sunLabel = sunLabelInfo.sprite
+    this.sunLabelFrac = { halfWFrac: sunLabelInfo.halfWFrac, halfHFrac: sunLabelInfo.halfHFrac }
     this.scene.add(this.sunLabel)
 
-    this.earthLabel = this.makeLabel(t('label-earth'), '#8fc0ff')
+    const earthLabelInfo = this.makeLabel(t('label-earth'), '#8fc0ff')
+    this.earthLabel = earthLabelInfo.sprite
+    this.earthLabelFrac = { halfWFrac: earthLabelInfo.halfWFrac, halfHFrac: earthLabelInfo.halfHFrac }
     this.scene.add(this.earthLabel)
 
-    this.moonLabel = this.makeLabel(t('label-moon'), '#ccd4ee')
+    const moonLabelInfo = this.makeLabel(t('label-moon'), '#ccd4ee')
+    this.moonLabel = moonLabelInfo.sprite
+    this.moonLabelFrac = { halfWFrac: moonLabelInfo.halfWFrac, halfHFrac: moonLabelInfo.halfHFrac }
     this.scene.add(this.moonLabel)
 
     // 天体の実座標とラベル位置を結ぶ引き出し線（両端はupdateLabels()で毎フレーム更新する）
-    this.sunLeader = this.makeLeaderLine('#ffee44')
-    this.earthLeader = this.makeLeaderLine('#8fc0ff')
-    this.moonLeader = this.makeLeaderLine('#ccd4ee')
+    this.sunLeader = this.makeLeaderLine('#8899bb')
+    this.earthLeader = this.makeLeaderLine('#8899bb')
+    this.moonLeader = this.makeLeaderLine('#8899bb')
     this.scene.add(this.sunLeader, this.earthLeader, this.moonLeader)
+
+    // デバッグ用: ラベルサイズの枠線（-0.5〜0.5の単位正方形を、updateLabels()で
+    // 実測したtextHalfW/textHalfHのワールドサイズに拡大縮小し、カメラの向きに合わせて配置する）
+    if (ScaleModel3D.DEBUG_SHOW_LABEL_SIZE) {
+      for (let i = 0; i < 3; i++) {
+        const boxGeo = new THREE.BufferGeometry().setFromPoints([
+          new THREE.Vector3(-0.5, -0.5, 0), new THREE.Vector3(0.5, -0.5, 0),
+          new THREE.Vector3(0.5, 0.5, 0), new THREE.Vector3(-0.5, 0.5, 0),
+        ])
+        const box = new THREE.LineLoop(boxGeo, new THREE.LineBasicMaterial({
+          color: 0xff3300, transparent: true, opacity: 0.9, depthTest: false, depthWrite: false,
+        }))
+        box.renderOrder = 999
+        this.debugLabelSizeBoxes.push(box)
+        this.scene.add(box)
+      }
+    }
 
     // クリックで太陽・地球・月のいずれかをクリックしたら、その天体を中心に回り込む
     // （「Home」キーで全天体がフレームに収まる位置へ、3Dツールの定番ショートカットに合わせている）
@@ -399,7 +433,22 @@ export class ScaleModel3D {
     this.moveCameraTo(center, this.frameDistanceForBodies(selected, center, 1.15))
   }
 
-  private makeLabel(text: string, color: string): THREE.Sprite {
+  /**
+   * canvas全体(256×64)に対して、実際に描画される文字がどれだけの割合を占めるかを
+   * ctx.measureText()で実測する。canvasは常に固定サイズ(透明な余白込み)だが、当たり判定・
+   * 引き出し線の距離計算では「見えている文字」までの距離を知りたいため、この比率を使って
+   * 実際の文字サイズを算出する（updateLabels()参照）
+   */
+  private measureLabelTextFrac(ctx: CanvasRenderingContext2D, text: string, canvasW: number, canvasH: number) {
+    const m = ctx.measureText(text)
+    const textW = m.width
+    const textH = (m.actualBoundingBoxAscent ?? 14) + (m.actualBoundingBoxDescent ?? 14)
+    const halfWFrac = THREE.MathUtils.clamp((textW / 2) / (canvasW / 2), 0.05, 1)
+    const halfHFrac = THREE.MathUtils.clamp((textH / 2) / (canvasH / 2), 0.05, 1)
+    return { halfWFrac, halfHFrac }
+  }
+
+  private makeLabel(text: string, color: string): { sprite: THREE.Sprite; halfWFrac: number; halfHFrac: number } {
     const c = document.createElement('canvas')
     c.width = 256; c.height = 64
     const ctx = c.getContext('2d')!
@@ -410,6 +459,7 @@ export class ScaleModel3D {
     ctx.shadowBlur = 8
     ctx.fillStyle = color
     ctx.fillText(text, 128, 32)
+    const { halfWFrac, halfHFrac } = this.measureLabelTextFrac(ctx, text, c.width, c.height)
     const sprite = new THREE.Sprite(new THREE.SpriteMaterial({
       map: new THREE.CanvasTexture(c),
       transparent: true,
@@ -417,7 +467,7 @@ export class ScaleModel3D {
       depthWrite: false,
     }))
     sprite.renderOrder = 999
-    return sprite
+    return { sprite, halfWFrac, halfHFrac }
   }
 
   /** 天体の実座標とラベル位置を結ぶ引き出し線（両端はupdateLabels()で毎フレーム書き換える） */
@@ -426,7 +476,7 @@ export class ScaleModel3D {
       new THREE.Vector3(), new THREE.Vector3(),
     ])
     const mat = new THREE.LineBasicMaterial({
-      color, transparent: true, opacity: 0.55,
+      color, transparent: true, opacity: 0.25,
       depthTest: false, depthWrite: false, // ラベルと同様、常に手前に見えるようにする
     })
     const line = new THREE.Line(geo, mat)
@@ -458,8 +508,17 @@ export class ScaleModel3D {
 
   // ラベルの高さを、画面高さに対する割合で管理する（太陽・地球・月とも同じ値=同じ見た目の大きさ）
   private static readonly LABEL_HEIGHT_FRACTION = 0.035
+  // 天体の外周〜ラベルの外周を、次の3区間の画面ピクセル値で構成する。天体の見た目のサイズや
+  // ズームに関係なく常にこの値を保つ（数値を変えるだけで間隔を調整できる）
+  // 天体の外周 → (MODEL_TO_LINE_PX) → 引き出し線の始点 → (LINE_LENGTH_PX) → 引き出し線の終点
+  //   → (LINE_TO_LABEL_PX) → ラベルの外周
+  private static readonly MODEL_TO_LINE_PX = 10
+  private static readonly LINE_LENGTH_PX = 20
+  private static readonly LINE_TO_LABEL_PX = 10
   // 衝突をほぐす反復回数（天体3つ・判定ペアは少数なので数回で十分収束する）
   private static readonly LABEL_COLLISION_ITERATIONS = 6
+  // デバッグ用: 実際に当たり判定に使っている「ラベルのサイズ」の枠線表示のON/OFF
+  private static readonly DEBUG_SHOW_LABEL_SIZE = false
 
   /**
    * ラベルは基本的に天体の実座標にそのまま置く（オフセットなし＝天体本体と重なった状態から
@@ -484,7 +543,66 @@ export class ScaleModel3D {
 
     const labelHalfH = Math.tan(fovVRad / 2) * ScaleModel3D.LABEL_HEIGHT_FRACTION
     const labelHalfW = labelHalfH * 4
-    const labelRadius = Math.hypot(labelHalfW, labelHalfH) // ラベル矩形を円で近似（判定を単純化）
+
+    // 画面ピクセルを、このフレームのtan角度空間の値に変換するヘルパー。
+    // レイアウト確定前（display:noneから切り替わった直後など）はclientHeightが一瞬0になり得る。
+    // 0除算でInfinityになり、さらにフォールバック方向(0,1)との掛け算でNaNへ波及するのを防ぐため
+    // 最低1にクランプする
+    const canvasHeightPx = Math.max(this.renderer.domElement.clientHeight, 1)
+    const pxToTan = (px: number) => px * 2 * Math.tan(fovVRad / 2) / canvasHeightPx
+    const modelToLineTan = pxToTan(ScaleModel3D.MODEL_TO_LINE_PX)
+    const lineLengthTan = pxToTan(ScaleModel3D.LINE_LENGTH_PX)
+    const lineToLabelTan = pxToTan(ScaleModel3D.LINE_TO_LABEL_PX)
+    const totalGapTan = modelToLineTan + lineLengthTan + lineToLabelTan
+
+    // 天体の見た目の半径(r = 実半径/深度)から、遠近法で見た実際の輪郭（シルエット）が
+    // tan角度空間でどこに見えるかを求める。中心と同じ深度のまま横にrだけずらした点は、
+    // 3D的には球の表面上だが、遠近法で投影すると実際の輪郭より内側に見えてしまうため、
+    // tanθ = r / √(1 - r²) （θ=輪郭の視半径、sinθ=rとなる直角三角形から導出）で補正する。
+    // r→1(カメラが天体の半径より近づく。minDistanceは天体ごとに調整していないため起こり得る)
+    // で式が発散するため、rを安全な範囲にクランプしてから計算する
+    const sphereEdgeTan = (r: number) => {
+      const rSafe = Math.min(Math.abs(r), 0.98)
+      return rSafe / Math.sqrt(Math.max(1 - rSafe * rSafe, 1e-6))
+    }
+
+    // ラベル（横長の長方形）の中心から、指定した方向(ux,uy)にある辺までの距離。
+    // hypot(halfW,halfH)（対角線方向の円近似）は方向によって実際の辺よりかなり大きく
+    // 見積もってしまう（特に真上方向に押し出される典型ケースでは半分の高さが正しく、
+    // 対角円近似は数倍大きい）ため、天体からの押し出し量を決める際はこちらを使う。
+    // halfW/halfHは呼び出し側で「箱」でも「実際の文字」でも渡せるようにしている
+    const labelEdgeDistTo = (ux: number, uy: number, halfW: number, halfH: number) => {
+      const tx = Math.abs(ux) > 1e-9 ? halfW / Math.abs(ux) : Infinity
+      const ty = Math.abs(uy) > 1e-9 ? halfH / Math.abs(uy) : Infinity
+      return Math.min(tx, ty)
+    }
+
+    // 天体(円)とラベル(長方形)専用の押し出し判定。ラベル側の「半径」を方向ごとに正しく計算する。
+    // ここでのhalfW/halfHは「実際に見えている文字」のサイズ（ctx.measureText()の実測値ベース）を
+    // 渡す。線とラベルの間隔を「見た目の文字」までの距離として保証するため
+    const overlapSphereLabel = (
+      sphere: { x: number; y: number; r: number }, lx: number, ly: number,
+      textHalfW: number, textHalfH: number, extraGapTan: number
+    ) => {
+      const dx = lx - sphere.x, dy = ly - sphere.y
+      const dist = Math.hypot(dx, dy)
+      const nx = dist < 1e-6 ? 0 : dx / dist
+      const ny = dist < 1e-6 ? 1 : dy / dist
+      const required = sphereEdgeTan(sphere.r) + labelEdgeDistTo(nx, ny, textHalfW, textHalfH) + extraGapTan
+      const overlap = required - dist
+      if (overlap <= 0) return null
+      return { nx, ny, overlap }
+    }
+
+    // 天体ごと（太陽・地球・月の順、labels/spheresと同じ順）の「実際に見えている文字」の
+    // 半幅・半高（tan空間）。canvas全体(箱)のhalfW/halfHに、ctx.measureText()で測った比率を掛ける
+    const labelFracs = [this.sunLabelFrac, this.earthLabelFrac, this.moonLabelFrac]
+    const textHalfWs = labelFracs.map(f => labelHalfW * f.halfWFrac)
+    const textHalfHs = labelFracs.map(f => labelHalfH * f.halfHFrac)
+    // ラベル同士の衝突回避（①）用の半径。ここも実測テキストサイズを使わないと、天体同士が
+    // 画面上で接近する場面（例: 地球と月）で①の「箱基準の大きい反発」が支配的になり、
+    // ②で精密にコントロールしたはずの間隔が台無しになる
+    const textRadii = textHalfWs.map((w, i) => Math.hypot(w, textHalfHs[i]))
 
     type LabelState = {
       sprite: THREE.Sprite; leader: THREE.Line; bodyPos: THREE.Vector3
@@ -518,21 +636,25 @@ export class ScaleModel3D {
     }
 
     for (let iter = 0; iter < ScaleModel3D.LABEL_COLLISION_ITERATIONS; iter++) {
-      // ① ラベル同士
+      // ① ラベル同士（実測テキストサイズを使う。箱基準のlabelRadiusのままだと、天体同士が
+      // 画面上で接近する場面でここが支配的になり、②の精密な距離コントロールを台無しにする）
       for (let i = 0; i < labels.length; i++) {
         for (let j = i + 1; j < labels.length; j++) {
           const a = labels[i], b = labels[j]
-          const hit = overlapOf(a.x, a.y, labelRadius, b.x, b.y, labelRadius)
+          const hit = overlapOf(a.x, a.y, textRadii[i], b.x, b.y, textRadii[j])
           if (!hit) continue
           const push = hit.overlap / 2
           a.x -= hit.nx * push; a.y -= hit.ny * push
           b.x += hit.nx * push; b.y += hit.ny * push
         }
       }
-      // ② ラベル と 天体本体（自分の球も含め、全ての球から押し出す）
-      for (const label of labels) {
+      // ② ラベル と 天体本体（自分の球も含め、全ての球から押し出す）。overlapSphereLabelが
+      // 遠近法補正後の輪郭・方向ごとの正しい「実際の文字」の辺・3区間合計(totalGapTan)の
+      // 隙間をすべて考慮して必要な距離を計算する
+      for (let li = 0; li < labels.length; li++) {
+        const label = labels[li]
         for (const sphere of spheres) {
-          const hit = overlapOf(sphere.x, sphere.y, sphere.r, label.x, label.y, labelRadius)
+          const hit = overlapSphereLabel(sphere, label.x, label.y, textHalfWs[li], textHalfHs[li], totalGapTan)
           if (!hit) continue
           label.x += hit.nx * hit.overlap
           label.y += hit.ny * hit.overlap
@@ -540,16 +662,46 @@ export class ScaleModel3D {
       }
     }
 
-    for (const s of labels) {
+    for (let i = 0; i < labels.length; i++) {
+      const s = labels[i]
+      const sphere = spheres[i] // labels/spheresは同じ順番（太陽・地球・月）で作っている
+
       // tan角度空間でのズレ量に、そのラベル自身の深度を掛けてワールド座標のオフセットへ戻す
       s.sprite.position.copy(s.bodyPos)
         .addScaledVector(right, (s.x - s.baseX) * s.depth)
         .addScaledVector(up, (s.y - s.baseY) * s.depth)
 
-      // 引き出し線: 天体の実座標 → ラベル位置
+      // デバッグ用: ラベルサイズの枠線を、ラベルと同じ位置・カメラの向きに合わせ、
+      // 実測したtextHalfW/textHalfHのワールドサイズに拡大縮小する
+      if (ScaleModel3D.DEBUG_SHOW_LABEL_SIZE) {
+        const box = this.debugLabelSizeBoxes[i]
+        box.position.copy(s.sprite.position)
+        box.quaternion.copy(this.camera.quaternion)
+        box.scale.set(textHalfWs[i] * 2 * s.depth, textHalfHs[i] * 2 * s.depth, 1)
+      }
+
+      // 引き出し線: 天体の外周から MODEL_TO_LINE_PX 離れた点 〜 さらに LINE_LENGTH_PX 先の点
+      // だけを引く（天体本体にもラベルにも触れない。残りの LINE_TO_LABEL_PX 分はラベル手前の
+      // 空白として残る）
+      const dx = s.x - s.baseX, dy = s.y - s.baseY
+      const dist = Math.hypot(dx, dy)
+      const ux = dist > 1e-6 ? dx / dist : 0
+      const uy = dist > 1e-6 ? dy / dist : 1
+      const edgeTan = sphereEdgeTan(sphere.r)
+      const startX = s.baseX + ux * (edgeTan + modelToLineTan)
+      const startY = s.baseY + uy * (edgeTan + modelToLineTan)
+      const endX = startX + ux * lineLengthTan
+      const endY = startY + uy * lineLengthTan
+      const toWorld = (tx: number, ty: number) =>
+        s.bodyPos.clone()
+          .addScaledVector(right, (tx - s.baseX) * s.depth)
+          .addScaledVector(up, (ty - s.baseY) * s.depth)
+      const lineStart = toWorld(startX, startY)
+      const lineEnd = toWorld(endX, endY)
+
       const posAttr = s.leader.geometry.attributes.position as THREE.BufferAttribute
-      posAttr.setXYZ(0, s.bodyPos.x, s.bodyPos.y, s.bodyPos.z)
-      posAttr.setXYZ(1, s.sprite.position.x, s.sprite.position.y, s.sprite.position.z)
+      posAttr.setXYZ(0, lineStart.x, lineStart.y, lineStart.z)
+      posAttr.setXYZ(1, lineEnd.x, lineEnd.y, lineEnd.z)
       posAttr.needsUpdate = true
     }
   }
@@ -601,10 +753,11 @@ export class ScaleModel3D {
       mat.map?.dispose()
       mat.map = new THREE.CanvasTexture(c)
       mat.needsUpdate = true
+      return this.measureLabelTextFrac(ctx, text, c.width, c.height)
     }
-    rewrite(this.sunLabel, t('label-sun'), '#ffee44')
-    rewrite(this.earthLabel, t('label-earth'), '#8fc0ff')
-    rewrite(this.moonLabel, t('label-moon'), '#ccd4ee')
+    this.sunLabelFrac = rewrite(this.sunLabel, t('label-sun'), '#ffee44')
+    this.earthLabelFrac = rewrite(this.earthLabel, t('label-earth'), '#8fc0ff')
+    this.moonLabelFrac = rewrite(this.moonLabel, t('label-moon'), '#ccd4ee')
   }
 
   handleResize() {
