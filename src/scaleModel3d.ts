@@ -481,6 +481,11 @@ export class ScaleModel3D {
     })
     const line = new THREE.Line(geo, mat)
     line.renderOrder = 998
+    // 毎フレームgeometryの頂点座標だけを書き換えており、geometry.boundingSphereは
+    // 初回描画時の位置のまま更新されない。デフォルトのfrustumCulled=trueのままだと、
+    // その固定されたboundingSphereが視錐台の外に出た瞬間、実際の座標に関わらず
+    // 描画から除外されてしまう（ズーム操作で線が消える不具合の原因）ため無効化する
+    line.frustumCulled = false
     return line
   }
 
