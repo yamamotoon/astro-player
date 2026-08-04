@@ -144,13 +144,16 @@ export class ScaleModel3D {
     this.earthMesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), EARTH_AXIS)
     this.scene.add(this.earthMesh)
 
-    // 地球の自転軸（デバッグ表示）: 公転軸(Y)から実際の地軸傾斜23.44度だけ傾いた向きに描画する
-    const axisLen = EARTH_R * 1.8
+    // 地球の自転軸（デバッグ表示）: 公転軸(Y)から実際の地軸傾斜23.44度だけ傾いた向きに描画する。
+    // 主役の天体・ラベルより控えめに見えるよう、短め・半透明の細い線にしている
+    const axisLen = EARTH_R * 1.2
     const axisGeo = new THREE.BufferGeometry().setFromPoints([
       EARTH_AXIS.clone().multiplyScalar(-axisLen),
       EARTH_AXIS.clone().multiplyScalar(axisLen),
     ])
-    const earthAxis = new THREE.Line(axisGeo, new THREE.LineBasicMaterial({ color: 0xff6666 }))
+    const earthAxis = new THREE.Line(axisGeo, new THREE.LineBasicMaterial({
+      color: 0xaa7777, transparent: true, opacity: 0.4,
+    }))
     earthAxis.position.copy(EARTH_POS)
     this.scene.add(earthAxis)
 
