@@ -1,6 +1,7 @@
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { t } from './i18n'
+import earthTextureUrl from './assets/earth-texture.png'
 
 // ---- 実際の物理値(km)。月半径=1になるよう、常にこれらから比率を算出する ----
 const MOON_RADIUS_KM = 1737
@@ -131,10 +132,16 @@ export class ScaleModel3D {
     // 地球・月はライティングに反応するMeshLambertMaterialにし、太陽光による陰影を付ける
     this.earthMesh = new THREE.Mesh(
       new THREE.SphereGeometry(EARTH_R, 32, 24),
-      new THREE.MeshLambertMaterial({ map: this.makeEarthTexture() })
+      new THREE.MeshLambertMaterial({ map: new THREE.TextureLoader().load(earthTextureUrl) })
     )
     this.earthMesh.position.copy(EARTH_POS)
     this.earthMesh.userData.radius = EARTH_R
+    // SphereGeometryのUV規約ではテクスチャの北極/南極はメッシュのローカルY軸上に来る。
+    // 初期状態のままだとローカルY軸=ワールドY軸（傾き0°）のため、EARTH_AXIS（23.44度傾いた軸）で
+    // 自転させるとテクスチャの極とEARTH_AXISが一致せず、自転につれて極がぶれてしまう。
+    // ここで一度だけローカルY軸をEARTH_AXISへ向けておくことで、以降のrotateOnWorldAxis(EARTH_AXIS,…)が
+    // 極を動かさず赤道面だけを回すようになる
+    this.earthMesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), EARTH_AXIS)
     this.scene.add(this.earthMesh)
 
     // 地球の自転軸（デバッグ表示）: 公転軸(Y)から実際の地軸傾斜23.44度だけ傾いた向きに描画する
@@ -487,28 +494,6 @@ export class ScaleModel3D {
     // 描画から除外されてしまう（ズーム操作で線が消える不具合の原因）ため無効化する
     line.frustumCulled = false
     return line
-  }
-
-  /** 簡易的な地球風テクスチャ（海+大陸のイラスト調。正確な地形ではない） */
-  private makeEarthTexture(): THREE.Texture {
-    const c = document.createElement('canvas')
-    c.width = 512; c.height = 256
-    const ctx = c.getContext('2d')!
-    ctx.fillStyle = '#2f6fb0'
-    ctx.fillRect(0, 0, c.width, c.height)
-    ctx.fillStyle = '#4f9e5c'
-    const blob = (cx: number, cy: number, rx: number, ry: number, rot: number) => {
-      ctx.beginPath()
-      ctx.ellipse(cx, cy, rx, ry, rot, 0, Math.PI * 2)
-      ctx.fill()
-    }
-    blob(90, 95, 55, 68, 0.4)
-    blob(140, 175, 38, 30, -0.3)
-    blob(300, 60, 68, 40, 0.2)
-    blob(345, 150, 48, 58, -0.5)
-    blob(420, 205, 34, 24, 0.1)
-    blob(470, 90, 30, 22, -0.2)
-    return new THREE.CanvasTexture(c)
   }
 
   // ラベルの高さを、画面高さに対する割合で管理する（太陽・地球・月とも同じ値=同じ見た目の大きさ）
