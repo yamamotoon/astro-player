@@ -107,7 +107,10 @@ export class ScaleModel3D {
 
     this.scene = new THREE.Scene()
 
-    this.camera = new THREE.PerspectiveCamera(50, 1, 0.5, 200000)
+    // far=500,000: 縦長画面でのframeAll()が必要とする距離（EARTH_SUN_DIST比で数倍になりうる。
+    // moveCameraTo()参照）より確実に大きくしておかないと、距離自体は正しく計算されても
+    // 描画がクリッピングされて見えなくなってしまう
+    this.camera = new THREE.PerspectiveCamera(50, 1, 0.5, 500000)
     const initOffset = new THREE.Vector3(EARTH_MOON_DIST * 2, EARTH_MOON_DIST * 1.2, EARTH_MOON_DIST * 2)
     this.camera.position.copy(EARTH_POS).add(initOffset)
     this.camera.lookAt(EARTH_POS)
@@ -287,6 +290,12 @@ export class ScaleModel3D {
     const dir = this.camera.position.clone().sub(this.controls.target)
     if (dir.lengthSq() < 1e-9) dir.set(1, 0.6, 1)
     dir.normalize()
+    // controls.maxDistanceは本来「手動ズームでどこまで離れられるか」の上限だが、
+    // OrbitControls.update()は毎フレームカメラ距離をこの上限以内に強制する。
+    // frameDistance()/frameDistanceForBodies()側では計算結果をこの上限でクランプしなくなった
+    // ため（縦長画面ではEARTH_SUN_DISTの1.5倍を超える距離が正しく必要になりうる。
+    // frameAll()参照）、ここで動かす直前に上限そのものを必要な分だけ引き上げておく
+    if (distance > this.controls.maxDistance) this.controls.maxDistance = distance
     this.controls.target.copy(target)
     this.camera.position.copy(target).addScaledVector(dir, distance)
     this.camera.lookAt(target)
@@ -309,7 +318,9 @@ export class ScaleModel3D {
     const hFovRad = 2 * Math.atan(Math.tan(vFovRad / 2) * this.camera.aspect)
     const distV = boundingRadius / Math.sin(vFovRad / 2)
     const distH = boundingRadius / Math.sin(hFovRad / 2)
-    const distance = Math.min(Math.max(distV, distH) * margin, this.controls.maxDistance)
+    // controls.maxDistance（手動ズームの上限）ではクランプしない。縦長画面など状況によっては
+    // その上限を超える距離が正しく必要になるため（moveCameraTo()側で上限自体を引き上げる）
+    const distance = Math.max(distV, distH) * margin
     console.log('[ScaleModel3D] frameDistance', {
       boundingRadius: +boundingRadius.toFixed(3), margin,
       aspect: +this.camera.aspect.toFixed(4),
@@ -361,7 +372,8 @@ export class ScaleModel3D {
       })
     }
 
-    const distance = Math.min(Math.max(required, 0) * margin, this.controls.maxDistance)
+    // controls.maxDistance（手動ズームの上限）ではクランプしない。理由はframeDistance()と同じ
+    const distance = Math.max(required, 0) * margin
     console.log('[ScaleModel3D] frameDistanceForBodies', {
       center: center.toArray().map(v => +v.toFixed(2)),
       dir: dir.toArray().map(v => +v.toFixed(4)),
