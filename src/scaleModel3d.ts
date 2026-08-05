@@ -34,6 +34,8 @@ const FOCUSABLE = [
   { pos: MOON_POS, radius: MOON_R },
 ] as const
 
+type BodyKey = 'sun' | 'earth' | 'moon'
+
 export class ScaleModel3D {
   private renderer: THREE.WebGLRenderer
   private scene: THREE.Scene
@@ -77,14 +79,26 @@ export class ScaleModel3D {
   private gizmoCanvas = document.getElementById('scale-angle-gizmo') as HTMLCanvasElement | null
 
   private readonly onKeyDown: (e: KeyboardEvent) => void
-  private readonly onClick: (e: MouseEvent) => void
-  private readonly onSelectDown: (e: PointerEvent) => void
-  private readonly onSelectMove: (e: PointerEvent) => void
-  private readonly onSelectUp: (e: PointerEvent) => void
+  private readonly onPointerDown: (e: PointerEvent) => void
+  private readonly onPointerUp: (e: PointerEvent) => void
 
-  private selectMode = false
-  private selectStart: { x: number; y: number } | null = null
-  private selectBoxEl = document.getElementById('scale-select-box')
+  // タップ/クリック判定用（ブラウザのclickイベントはドラッグ後のmouseupでも発火してしまうため、
+  // pointerdown/pointerup間の移動量を自前で見て「実質動いていない時だけタップ扱い」にする）
+  private pointerDownPos: { x: number; y: number } | null = null
+  private static readonly TAP_MOVE_THRESHOLD_PX = 6
+
+  // 選択状態: カメラは動かさず、押した天体を選択に追加/フォーカスするだけの状態（updateLabels()の
+  // ラベル強調・updateSelectionGlow()の天体発光・focusOnSelection()の対象として使う）
+  private selected = new Set<BodyKey>()
+
+  // キー付きで天体を引けるようにするルックアップ（当たり判定・選択・フォーカスで使う）
+  private meshByKey!: Record<BodyKey, THREE.Mesh>
+  private posByKey!: Record<BodyKey, THREE.Vector3>
+  private radiusByKey!: Record<BodyKey, number>
+  private labelMaps!: Record<BodyKey, { normal: THREE.Texture; selected: THREE.Texture }>
+  // 選択中の天体を示す輪郭（本体をわずかに拡大し裏面だけ描画する殻。本体のテクスチャ/マテリアルには
+  // 一切触れないので見た目が変わらない）
+  private outlineByKey!: Record<BodyKey, THREE.Mesh>
 
   constructor(canvas: HTMLCanvasElement) {
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true })
@@ -195,6 +209,20 @@ export class ScaleModel3D {
     this.moonLabelFrac = { halfWFrac: moonLabelInfo.halfWFrac, halfHFrac: moonLabelInfo.halfHFrac }
     this.scene.add(this.moonLabel)
 
+    this.meshByKey = { sun: this.sunMesh, earth: this.earthMesh, moon: this.moonMesh }
+    this.posByKey = { sun: SUN_POS, earth: EARTH_POS, moon: MOON_POS }
+    this.radiusByKey = { sun: SUN_R, earth: EARTH_R, moon: MOON_R }
+    this.outlineByKey = {
+      sun: this.makeOutlineHull(this.sunMesh),
+      earth: this.makeOutlineHull(this.earthMesh),
+      moon: this.makeOutlineHull(this.moonMesh),
+    }
+    this.labelMaps = {
+      sun: { normal: sunLabelInfo.normalMap, selected: sunLabelInfo.selectedMap },
+      earth: { normal: earthLabelInfo.normalMap, selected: earthLabelInfo.selectedMap },
+      moon: { normal: moonLabelInfo.normalMap, selected: moonLabelInfo.selectedMap },
+    }
+
     // 天体の実座標とラベル位置を結ぶ引き出し線（両端はupdateLabels()で毎フレーム更新する）
     this.sunLeader = this.makeLeaderLine('#8899bb')
     this.earthLeader = this.makeLeaderLine('#8899bb')
@@ -218,71 +246,29 @@ export class ScaleModel3D {
       }
     }
 
-    // クリックで太陽・地球・月のいずれかをクリックしたら、その天体を中心に回り込む
-    // （「Home」キーで全天体がフレームに収まる位置へ、3Dツールの定番ショートカットに合わせている）
-    // 矩形選択モード中は、こちらではなく onSelectDown/Move/Up 側で処理する
-    this.onClick = (e: MouseEvent) => {
-      if (this.selectMode) return
-      const rect = canvas.getBoundingClientRect()
-      const ndc = new THREE.Vector2(
-        ((e.clientX - rect.left) / rect.width) * 2 - 1,
-        -((e.clientY - rect.top) / rect.height) * 2 + 1
-      )
-      this.raycaster.setFromCamera(ndc, this.camera)
-      const hits = this.raycaster.intersectObjects([this.sunMesh, this.earthMesh, this.moonMesh])
-      if (hits.length === 0) return
-      const hitMesh = hits[0].object as THREE.Mesh
-      this.focusOn(hitMesh.position, hitMesh.userData.radius as number)
+    // 天体を押す(クリック/タップ)たびに選択に追加し、既に選択済みの天体を押すと選択中の天体
+    // すべてにフォーカスする。ブラウザのclickイベントはドラッグ後のmouseupでも発火してしまうため
+    // (軌道回転の指を離した場所がたまたま天体の上だと誤発火する)、pointerdown/pointerupの
+    // 移動量を自前で見て「実質動いていない時だけタップ扱い」にする
+    this.onPointerDown = (e: PointerEvent) => {
+      this.pointerDownPos = { x: e.clientX, y: e.clientY }
     }
-    canvas.addEventListener('click', this.onClick)
+    this.onPointerUp = (e: PointerEvent) => {
+      const start = this.pointerDownPos
+      this.pointerDownPos = null
+      if (!start) return
+      const moved = Math.hypot(e.clientX - start.x, e.clientY - start.y)
+      if (moved > ScaleModel3D.TAP_MOVE_THRESHOLD_PX) return
+      this.handleTap(e.clientX, e.clientY)
+    }
+    canvas.addEventListener('pointerdown', this.onPointerDown)
+    canvas.addEventListener('pointerup', this.onPointerUp)
 
-    // 矩形選択モード: クリックだけでは狙いにくい小さい天体（縮小表示中の地球・月など）を
-    // ドラッグで囲んで選択できるようにする。有効時はOrbitControlsのドラッグ操作を止めている
-    this.onSelectDown = (e: PointerEvent) => {
-      if (!this.selectMode) return
-      this.selectStart = { x: e.clientX, y: e.clientY }
-      canvas.setPointerCapture(e.pointerId)
-      this.updateSelectBoxEl(e.clientX, e.clientY)
-      if (this.selectBoxEl) this.selectBoxEl.hidden = false
-    }
-    this.onSelectMove = (e: PointerEvent) => {
-      if (!this.selectMode || !this.selectStart) return
-      this.updateSelectBoxEl(e.clientX, e.clientY)
-    }
-    this.onSelectUp = (e: PointerEvent) => {
-      if (!this.selectMode || !this.selectStart) return
-      const start = this.selectStart
-      this.selectStart = null
-      if (this.selectBoxEl) this.selectBoxEl.hidden = true
-
-      const dx = e.clientX - start.x
-      const dy = e.clientY - start.y
-      if (Math.hypot(dx, dy) < 4) {
-        // ほぼ動いていない = クリック相当。1点だけraycastで拾う
-        const rect = canvas.getBoundingClientRect()
-        const ndc = new THREE.Vector2(
-          ((e.clientX - rect.left) / rect.width) * 2 - 1,
-          -((e.clientY - rect.top) / rect.height) * 2 + 1
-        )
-        this.raycaster.setFromCamera(ndc, this.camera)
-        const hits = this.raycaster.intersectObjects([this.sunMesh, this.earthMesh, this.moonMesh])
-        if (hits.length > 0) {
-          const hitMesh = hits[0].object as THREE.Mesh
-          this.focusOn(hitMesh.position, hitMesh.userData.radius as number)
-        }
-        return
-      }
-      this.selectWithinScreenRect(
-        Math.min(start.x, e.clientX), Math.min(start.y, e.clientY),
-        Math.max(start.x, e.clientX), Math.max(start.y, e.clientY)
-      )
-    }
-    canvas.addEventListener('pointerdown', this.onSelectDown)
-    canvas.addEventListener('pointermove', this.onSelectMove)
-    canvas.addEventListener('pointerup', this.onSelectUp)
-
+    // 「Home」キーで全天体がフレームに収まる位置へ（3Dツールの定番ショートカット）。
+    // Enter/Fキーは選択中の天体へのフォーカス（タップでの再選択と同じ効果のPC向け近道）
     this.onKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Home') this.frameAll()
+      if (e.key === 'Enter' || e.key === 'f' || e.key === 'F') this.focusOnSelection()
     }
     window.addEventListener('keydown', this.onKeyDown)
 
@@ -401,46 +387,103 @@ export class ScaleModel3D {
     this.moveCameraTo(center, this.frameDistanceForBodies(FOCUSABLE, center, 1.15))
   }
 
-  /** 矩形選択モードの有効/無効を切り替える。有効時はOrbitControlsのドラッグ操作を止める */
-  setSelectMode(on: boolean) {
-    this.selectMode = on
-    this.controls.enabled = !on
-    if (!on && this.selectBoxEl) this.selectBoxEl.hidden = true
+  // ラベルの当たり判定は常に画面上一定サイズの箱として扱う（本体をタップするより少し広めに取り、
+  // 特にモバイルでの指での操作をしやすくする）
+  private static readonly LABEL_HIT_PADDING = 1.5
+
+  /**
+   * 天体を押した(クリック/タップ)時の処理。「未選択の天体を押す→選択に追加」
+   * 「既に選択されている天体を押す→選択中の天体すべてにフォーカス」
+   * 「何もない場所を押す→選択解除」の1ルールで統一する
+   */
+  private handleTap(clientX: number, clientY: number) {
+    const hit = this.hitTestBody(clientX, clientY)
+    if (!hit) {
+      this.selected.clear()
+      return
+    }
+    if (this.selected.has(hit)) {
+      this.focusOnSelection()
+    } else {
+      this.selected.add(hit)
+    }
   }
 
-  private updateSelectBoxEl(curX: number, curY: number) {
-    if (!this.selectBoxEl || !this.selectStart) return
+  /**
+   * 天体本体(球体メッシュ)への通常のレイキャストと、常に画面上一定サイズを保つラベルへの
+   * 2D当たり判定をORで見る。ズームインして天体が大きい時は前者が、ズームアウトして天体が
+   * ほぼ点になっている時は後者が有効に働く
+   */
+  private hitTestBody(clientX: number, clientY: number): BodyKey | null {
     const rect = this.renderer.domElement.getBoundingClientRect()
-    const x0 = this.selectStart.x - rect.left
-    const y0 = this.selectStart.y - rect.top
-    const x1 = curX - rect.left
-    const y1 = curY - rect.top
-    this.selectBoxEl.style.left = `${Math.min(x0, x1)}px`
-    this.selectBoxEl.style.top = `${Math.min(y0, y1)}px`
-    this.selectBoxEl.style.width = `${Math.abs(x1 - x0)}px`
-    this.selectBoxEl.style.height = `${Math.abs(y1 - y0)}px`
+    const ndc = new THREE.Vector2(
+      ((clientX - rect.left) / rect.width) * 2 - 1,
+      -((clientY - rect.top) / rect.height) * 2 + 1
+    )
+    this.raycaster.setFromCamera(ndc, this.camera)
+    // recursive=falseを明示: 選択中の輪郭殻(makeOutlineHull)が各天体の子オブジェクトとして
+    // ぶら下がっており、既定のrecursive=trueだとそちらまで拾ってしまうため
+    const hits = this.raycaster.intersectObjects([this.sunMesh, this.earthMesh, this.moonMesh], false)
+    if (hits.length > 0) {
+      const mesh = hits[0].object
+      for (const key of ['sun', 'earth', 'moon'] as const) {
+        if (this.meshByKey[key] === mesh) return key
+      }
+    }
+    return this.hitTestLabel(clientX, clientY, rect)
   }
 
-  /** 画面座標の矩形(left/top/right/bottom, クライアント座標)内に入っている天体を選択し、フレームする */
-  private selectWithinScreenRect(left: number, top: number, right: number, bottom: number) {
-    const rect = this.renderer.domElement.getBoundingClientRect()
-    const selected: Array<{ pos: THREE.Vector3; radius: number }> = []
-    for (const body of FOCUSABLE) {
-      const ndc = body.pos.clone().project(this.camera)
+  private hitTestLabel(clientX: number, clientY: number, rect: DOMRect): BodyKey | null {
+    // labelHalfH(tan空間) = tan(fovV/2)*LABEL_HEIGHT_FRACTION をピクセルに変換すると
+    // tan(fovV/2)が打ち消し合い、FOVによらず常に「画面高さの一定割合」になる
+    // （updateLabels()のpxToTan()と対になる変換）
+    const canvasHeightPx = Math.max(this.renderer.domElement.clientHeight, 1)
+    const halfHPx = (ScaleModel3D.LABEL_HEIGHT_FRACTION / 2) * canvasHeightPx * ScaleModel3D.LABEL_HIT_PADDING
+    const halfWPx = halfHPx * 4 // ラベル用canvasは256x64(4:1)
+    for (const key of ['sun', 'earth', 'moon'] as const) {
+      const sprite = key === 'sun' ? this.sunLabel : key === 'earth' ? this.earthLabel : this.moonLabel
+      const ndc = sprite.position.clone().project(this.camera)
       if (ndc.z < -1 || ndc.z > 1) continue // カメラの後ろ側は対象外
       const sx = rect.left + (ndc.x * 0.5 + 0.5) * rect.width
       const sy = rect.top + (-ndc.y * 0.5 + 0.5) * rect.height
-      if (sx >= left && sx <= right && sy >= top && sy <= bottom) selected.push(body)
+      if (Math.abs(clientX - sx) <= halfWPx && Math.abs(clientY - sy) <= halfHPx) return key
     }
-    if (selected.length === 0) return
-    if (selected.length === 1) {
-      this.focusOn(selected[0].pos, selected[0].radius)
+    return null
+  }
+
+  /** 選択中の天体すべてがちょうど画面に収まる距離までカメラを移動する */
+  private focusOnSelection() {
+    const keys = Array.from(this.selected)
+    if (keys.length === 0) return
+    const bodies = keys.map(k => ({ pos: this.posByKey[k], radius: this.radiusByKey[k] }))
+    if (bodies.length === 1) {
+      this.focusOn(bodies[0].pos, bodies[0].radius)
       return
     }
     const center = new THREE.Vector3()
-    for (const b of selected) center.add(b.pos)
-    center.divideScalar(selected.length)
-    this.moveCameraTo(center, this.frameDistanceForBodies(selected, center, 1.15))
+    for (const b of bodies) center.add(b.pos)
+    center.divideScalar(bodies.length)
+    this.moveCameraTo(center, this.frameDistanceForBodies(bodies, center, 1.15))
+  }
+
+  // 選択中の天体を示す輪郭殻の、本体からのはみ出し量（画面ピクセル基準。updateLabels()で
+  // 毎フレーム、その時のカメラ距離に応じたワールドサイズへ変換する）
+  private static readonly OUTLINE_THICKNESS_PX = 1
+
+  /**
+   * 天体本体のジオメトリを再利用し、わずかに拡大した「殻」を子オブジェクトとして追加する。
+   * 裏面(BackSide)だけを描画するため、普段は本体に完全に隠れて見えず、本体の輪郭からわずかに
+   * はみ出た部分だけが縁取りのように見える。本体側のマテリアル/テクスチャには一切触れない。
+   * 拡大率は固定値ではなく、updateLabels()が毎フレームカメラ距離に応じて設定する
+   */
+  private makeOutlineHull(bodyMesh: THREE.Mesh): THREE.Mesh {
+    const hull = new THREE.Mesh(
+      bodyMesh.geometry,
+      new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.BackSide })
+    )
+    hull.visible = false
+    bodyMesh.add(hull)
+    return hull
   }
 
   /**
@@ -458,10 +501,22 @@ export class ScaleModel3D {
     return { halfWFrac, halfHFrac }
   }
 
-  private makeLabel(text: string, color: string): { sprite: THREE.Sprite; halfWFrac: number; halfHFrac: number } {
+  /**
+   * ラベルのcanvas(256x64)を描く。selected=trueの時は文字の背後に強調用の枠を足す
+   * （選択中であることを示す視覚フィードバック。文字そのものの位置・大きさは変えないため、
+   * measureLabelTextFrac()で測る当たり判定サイズはselected/normalどちらでも同じになる）
+   */
+  private drawLabelCanvas(text: string, color: string, selected: boolean): HTMLCanvasElement {
     const c = document.createElement('canvas')
     c.width = 256; c.height = 64
     const ctx = c.getContext('2d')!
+    if (selected) {
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.22)'
+      ctx.fillRect(6, 6, c.width - 12, c.height - 12)
+      ctx.strokeStyle = color
+      ctx.lineWidth = 3
+      ctx.strokeRect(6, 6, c.width - 12, c.height - 12)
+    }
     ctx.font = 'bold 28px Arial'
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
@@ -469,15 +524,27 @@ export class ScaleModel3D {
     ctx.shadowBlur = 8
     ctx.fillStyle = color
     ctx.fillText(text, 128, 32)
-    const { halfWFrac, halfHFrac } = this.measureLabelTextFrac(ctx, text, c.width, c.height)
+    return c
+  }
+
+  private makeLabel(text: string, color: string): {
+    sprite: THREE.Sprite; halfWFrac: number; halfHFrac: number
+    normalMap: THREE.CanvasTexture; selectedMap: THREE.CanvasTexture
+  } {
+    const normalCanvas = this.drawLabelCanvas(text, color, false)
+    const { halfWFrac, halfHFrac } = this.measureLabelTextFrac(
+      normalCanvas.getContext('2d')!, text, normalCanvas.width, normalCanvas.height
+    )
+    const normalMap = new THREE.CanvasTexture(normalCanvas)
+    const selectedMap = new THREE.CanvasTexture(this.drawLabelCanvas(text, color, true))
     const sprite = new THREE.Sprite(new THREE.SpriteMaterial({
-      map: new THREE.CanvasTexture(c),
+      map: normalMap,
       transparent: true,
       depthTest: false, // 球の裏側に回っても隠れず、常に手前に見えるようにする
       depthWrite: false,
     }))
     sprite.renderOrder = 999
-    return { sprite, halfWFrac, halfHFrac }
+    return { sprite, halfWFrac, halfHFrac, normalMap, selectedMap }
   }
 
   /** 天体の実座標とラベル位置を結ぶ引き出し線（両端はupdateLabels()で毎フレーム書き換える） */
@@ -598,19 +665,24 @@ export class ScaleModel3D {
     const textRadii = textHalfWs.map((w, i) => Math.hypot(w, textHalfHs[i]))
 
     type LabelState = {
-      sprite: THREE.Sprite; leader: THREE.Line; bodyPos: THREE.Vector3
+      key: BodyKey; sprite: THREE.Sprite; leader: THREE.Line; bodyPos: THREE.Vector3
       depth: number; baseX: number; baseY: number; x: number; y: number
     }
-    const makeLabelState = (sprite: THREE.Sprite, leader: THREE.Line, bodyPos: THREE.Vector3): LabelState => {
+    const makeLabelState = (key: BodyKey, sprite: THREE.Sprite, leader: THREE.Line, bodyPos: THREE.Vector3): LabelState => {
       const p = project(bodyPos)
       const h = 2 * labelHalfH * p.depth
       sprite.scale.set(h * 4, h, 1) // ラベル用canvasは256x64(4:1)なので幅は高さの4倍
-      return { sprite, leader, bodyPos, depth: p.depth, baseX: p.x, baseY: p.y, x: p.x, y: p.y }
+      // 選択中かどうかで、強調用の枠付きテクスチャに差し替える（当たり判定サイズは同じなので
+      // ①②の押し出し計算には影響しない）
+      const mat = sprite.material as THREE.SpriteMaterial
+      const wantMap = this.selected.has(key) ? this.labelMaps[key].selected : this.labelMaps[key].normal
+      if (mat.map !== wantMap) { mat.map = wantMap; mat.needsUpdate = true }
+      return { key, sprite, leader, bodyPos, depth: p.depth, baseX: p.x, baseY: p.y, x: p.x, y: p.y }
     }
     const labels = [
-      makeLabelState(this.sunLabel, this.sunLeader, SUN_POS),
-      makeLabelState(this.earthLabel, this.earthLeader, EARTH_POS),
-      makeLabelState(this.moonLabel, this.moonLeader, MOON_POS),
+      makeLabelState('sun', this.sunLabel, this.sunLeader, SUN_POS),
+      makeLabelState('earth', this.earthLabel, this.earthLeader, EARTH_POS),
+      makeLabelState('moon', this.moonLabel, this.moonLeader, MOON_POS),
     ]
 
     const spheres = FOCUSABLE.map(b => {
@@ -663,6 +735,17 @@ export class ScaleModel3D {
       s.sprite.position.copy(s.bodyPos)
         .addScaledVector(right, (s.x - s.baseX) * s.depth)
         .addScaledVector(up, (s.y - s.baseY) * s.depth)
+
+      // 選択中の輪郭殻: 本体からのはみ出し量(OUTLINE_THICKNESS_PX)を毎フレーム画面ピクセル基準で
+      // 一定に保つ。固定の拡大率(例: 1.12倍)のままだとズームアウトして天体が小さくなるほど
+      // 輪郭も一緒に縮んで見えなくなってしまう（ラベルが常に一定サイズを保つのと同じ理由）
+      const outline = this.outlineByKey[s.key]
+      outline.visible = this.selected.has(s.key)
+      if (outline.visible) {
+        const bodyRadius = this.radiusByKey[s.key]
+        const desiredRadius = bodyRadius + s.depth * pxToTan(ScaleModel3D.OUTLINE_THICKNESS_PX)
+        outline.scale.setScalar(desiredRadius / bodyRadius)
+      }
 
       // デバッグ用: ラベルサイズの枠線を、ラベルと同じ位置・カメラの向きに合わせ、
       // 実測したtextHalfW/textHalfHのワールドサイズに拡大縮小する
@@ -731,26 +814,23 @@ export class ScaleModel3D {
   }
 
   refreshTextLabels() {
-    const rewrite = (sprite: THREE.Sprite, text: string, color: string) => {
-      const c = document.createElement('canvas')
-      c.width = 256; c.height = 64
-      const ctx = c.getContext('2d')!
-      ctx.font = 'bold 28px Arial'
-      ctx.textAlign = 'center'
-      ctx.textBaseline = 'middle'
-      ctx.shadowColor = '#000'
-      ctx.shadowBlur = 8
-      ctx.fillStyle = color
-      ctx.fillText(text, 128, 32)
-      const mat = sprite.material as THREE.SpriteMaterial
-      mat.map?.dispose()
-      mat.map = new THREE.CanvasTexture(c)
-      mat.needsUpdate = true
-      return this.measureLabelTextFrac(ctx, text, c.width, c.height)
+    const rewrite = (key: BodyKey, text: string, color: string) => {
+      const normalCanvas = this.drawLabelCanvas(text, color, false)
+      const frac = this.measureLabelTextFrac(
+        normalCanvas.getContext('2d')!, text, normalCanvas.width, normalCanvas.height
+      )
+      this.labelMaps[key].normal.dispose()
+      this.labelMaps[key].selected.dispose()
+      this.labelMaps[key] = {
+        normal: new THREE.CanvasTexture(normalCanvas),
+        selected: new THREE.CanvasTexture(this.drawLabelCanvas(text, color, true)),
+      }
+      // 実際にどちらのmapを貼るかはupdateLabels()が毎フレーム選択状態を見て同期する
+      return frac
     }
-    this.sunLabelFrac = rewrite(this.sunLabel, t('label-sun'), '#ffee44')
-    this.earthLabelFrac = rewrite(this.earthLabel, t('label-earth'), '#8fc0ff')
-    this.moonLabelFrac = rewrite(this.moonLabel, t('label-moon'), '#ccd4ee')
+    this.sunLabelFrac = rewrite('sun', t('label-sun'), '#ffee44')
+    this.earthLabelFrac = rewrite('earth', t('label-earth'), '#8fc0ff')
+    this.moonLabelFrac = rewrite('moon', t('label-moon'), '#ccd4ee')
   }
 
   handleResize() {
@@ -786,9 +866,7 @@ export class ScaleModel3D {
     if (this.rafId !== null) cancelAnimationFrame(this.rafId)
     window.removeEventListener('keydown', this.onKeyDown)
     const canvas = this.renderer.domElement
-    canvas.removeEventListener('click', this.onClick)
-    canvas.removeEventListener('pointerdown', this.onSelectDown)
-    canvas.removeEventListener('pointermove', this.onSelectMove)
-    canvas.removeEventListener('pointerup', this.onSelectUp)
+    canvas.removeEventListener('pointerdown', this.onPointerDown)
+    canvas.removeEventListener('pointerup', this.onPointerUp)
   }
 }

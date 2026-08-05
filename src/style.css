@@ -373,13 +373,6 @@ main[data-fs="view2d"]:fullscreen .info-panel {
   height: 100%;
 }
 
-.scale-select-box {
-  position: absolute;
-  border: 1px dashed #4070c0;
-  background: rgba(64, 112, 192, 0.15);
-  pointer-events: none;
-}
-
 .scale-debug-hud {
   position: absolute;
   left: 8px;
@@ -406,12 +399,6 @@ main[data-fs="view2d"]:fullscreen .info-panel {
   background: rgba(0, 0, 20, 0.45);
   border-radius: 6px;
   pointer-events: none;
-}
-
-#scale-select-btn.active {
-  background: #1e3a6e;
-  border-color: #3a5a9e;
-  color: #a0c0ff;
 }
 
 .view-2d {

@@ -43,13 +43,6 @@ const scaleModel = new ScaleModel3D(canvasScale)
 const scaleFitBtn = document.getElementById('scale-fit-btn') as HTMLButtonElement
 scaleFitBtn.addEventListener('click', () => scaleModel.frameAll())
 
-const scaleSelectBtn = document.getElementById('scale-select-btn') as HTMLButtonElement
-scaleSelectBtn.addEventListener('click', () => {
-  const nowOn = !scaleSelectBtn.classList.contains('active')
-  scaleSelectBtn.classList.toggle('active', nowOn)
-  scaleModel.setSelectMode(nowOn)
-})
-
 function getSettings() {
   const lat = parseFloat(latInput.value) || 35.6762
   const lng = parseFloat(lngInput.value) || 139.6503
@@ -94,9 +87,6 @@ function showScene(name: SceneName) {
   }
   if (name === 'scale') {
     requestAnimationFrame(() => scaleModel.handleResize())
-  } else {
-    scaleModel.setSelectMode(false)
-    scaleSelectBtn.classList.remove('active')
   }
 }
 
