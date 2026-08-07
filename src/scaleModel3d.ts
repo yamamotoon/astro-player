@@ -81,10 +81,14 @@ export class ScaleModel3D {
   private readonly onKeyDown: (e: KeyboardEvent) => void
   private readonly onPointerDown: (e: PointerEvent) => void
   private readonly onPointerUp: (e: PointerEvent) => void
+  private readonly onPointerCancel: (e: PointerEvent) => void
 
   // タップ/クリック判定用（ブラウザのclickイベントはドラッグ後のmouseupでも発火してしまうため、
-  // pointerdown/pointerup間の移動量を自前で見て「実質動いていない時だけタップ扱い」にする）
-  private pointerDownPos: { x: number; y: number } | null = null
+  // pointerdown/pointerup間の移動量を自前で見て「実質動いていない時だけタップ扱い」にする）。
+  // pointerIdで指を区別する: 2本目の指が触れた時点でタップ候補を無効化することで、
+  // ピンチ/パン中に一方の指を離した際に誤ってタップと判定されるのを防ぐ
+  private tapCandidate: { pointerId: number; x: number; y: number } | null = null
+  private activePointerCount = 0
   private static readonly TAP_MOVE_THRESHOLD_PX = 6
 
   // 選択状態: カメラは動かさず、押した天体を選択に追加/フォーカスするだけの状態（updateLabels()の
@@ -254,18 +258,31 @@ export class ScaleModel3D {
     // (軌道回転の指を離した場所がたまたま天体の上だと誤発火する)、pointerdown/pointerupの
     // 移動量を自前で見て「実質動いていない時だけタップ扱い」にする
     this.onPointerDown = (e: PointerEvent) => {
-      this.pointerDownPos = { x: e.clientX, y: e.clientY }
+      this.activePointerCount++
+      // 1本目の指(または最初のマウスダウン)だけをタップ候補にする。2本目以降が触れた時点で
+      // 複数指の操作(ピンチ/パン)だと分かるので、どちらの指が先に離れてもタップ扱いしない
+      this.tapCandidate = this.activePointerCount === 1
+        ? { pointerId: e.pointerId, x: e.clientX, y: e.clientY }
+        : null
     }
     this.onPointerUp = (e: PointerEvent) => {
-      const start = this.pointerDownPos
-      this.pointerDownPos = null
-      if (!start) return
-      const moved = Math.hypot(e.clientX - start.x, e.clientY - start.y)
+      this.activePointerCount = Math.max(0, this.activePointerCount - 1)
+      const candidate = this.tapCandidate
+      if (!candidate || candidate.pointerId !== e.pointerId) return
+      this.tapCandidate = null
+      const moved = Math.hypot(e.clientX - candidate.x, e.clientY - candidate.y)
       if (moved > ScaleModel3D.TAP_MOVE_THRESHOLD_PX) return
       this.handleTap(e.clientX, e.clientY)
     }
+    // ブラウザ側の都合でタッチが打ち切られた場合(pointerup無しで終わる)も、カウント/候補を
+    // 正しく後始末しないとactivePointerCountが狂ったままになり、以降タップが一切効かなくなる
+    this.onPointerCancel = (e: PointerEvent) => {
+      this.activePointerCount = Math.max(0, this.activePointerCount - 1)
+      if (this.tapCandidate?.pointerId === e.pointerId) this.tapCandidate = null
+    }
     canvas.addEventListener('pointerdown', this.onPointerDown)
     canvas.addEventListener('pointerup', this.onPointerUp)
+    canvas.addEventListener('pointercancel', this.onPointerCancel)
 
     // 「Home」キーで全天体がフレームに収まる位置へ（3Dツールの定番ショートカット）。
     // Enter/Fキーは選択中の天体へのフォーカス（タップでの再選択と同じ効果のPC向け近道）
@@ -880,5 +897,6 @@ export class ScaleModel3D {
     const canvas = this.renderer.domElement
     canvas.removeEventListener('pointerdown', this.onPointerDown)
     canvas.removeEventListener('pointerup', this.onPointerUp)
+    canvas.removeEventListener('pointercancel', this.onPointerCancel)
   }
 }
