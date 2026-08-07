@@ -59,6 +59,7 @@ function setText(id: string, value: string) {
 const sceneMenu = document.getElementById('scene-menu') as HTMLElement
 const sceneHud = document.getElementById('scene-hud') as HTMLElement
 const scenePlayback = document.getElementById('scene-playback') as HTMLElement
+const scalePlayback = document.getElementById('scale-playback') as HTMLElement
 const sceneDashboard = document.getElementById('scene-dashboard') as HTMLElement
 const sceneSky = document.getElementById('scene-sky') as HTMLElement
 const sceneScale = document.getElementById('scene-scale') as HTMLElement
@@ -77,6 +78,7 @@ function showScene(name: SceneName) {
   sceneDashboard.style.display = name === 'dashboard' ? '' : 'none'
   sceneSky.style.display = name === 'sky' ? '' : 'none'
   sceneScale.style.display = name === 'scale' ? '' : 'none'
+  scalePlayback.style.display = name === 'scale' ? '' : 'none'
   constToggles.style.display = name === 'dashboard' ? '' : 'none'
   backNav.hidden = name === 'menu'
   if (name !== 'sky') arView.stop()

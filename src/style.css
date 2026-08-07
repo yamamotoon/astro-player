@@ -511,6 +511,40 @@ main[data-fs="view2d"]:fullscreen .info-panel {
   user-select: none;
 }
 
+/* ---- スケールモデル専用の時間バー（issue #004） ---- */
+.scale-mode-toggle {
+  display: flex;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.scale-mode-btn {
+  background: transparent;
+  border: 1px solid #2a2a4a;
+  color: #7080a0;
+  font-size: 0.7rem;
+  padding: 3px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.scale-mode-btn:hover {
+  border-color: #3a5a9e;
+}
+
+.scale-mode-btn.active {
+  background: #1e3a6e;
+  border-color: #3a5a9e;
+  color: #a0c0ff;
+}
+
+.scale-seekbar-label {
+  font-size: 0.64rem;
+  color: #506080;
+  white-space: nowrap;
+  padding: 0 2px;
+}
+
 /* AR パネル */
 .ar-panel {
   flex: 1;
@@ -644,6 +678,11 @@ main[data-fs="view2d"]:fullscreen .info-panel {
     width: 36px;
     height: 36px;
     font-size: 0.9rem;
+  }
+
+  .scale-mode-btn {
+    padding: 6px 10px;
+    font-size: 0.78rem;
   }
 
   /* views: 縦スクロール */

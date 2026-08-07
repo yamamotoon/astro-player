@@ -144,6 +144,22 @@
       </div>
     </section>
 
+    <!-- スケールモデル専用の時間バー: 3D+2D/SKYの24hシークバーとは独立（issue #004） -->
+    <section id="scale-playback" class="playback" style="display: none">
+      <div class="scale-mode-toggle" role="group" aria-label="時間モード">
+        <button id="scale-mode-day" class="scale-mode-btn" data-mode="day" data-i18n="scale-mode-day">日</button>
+        <button id="scale-mode-month" class="scale-mode-btn" data-mode="month" data-i18n="scale-mode-month">月</button>
+        <button id="scale-mode-year" class="scale-mode-btn" data-mode="year" data-i18n="scale-mode-year">年</button>
+      </div>
+      <button id="scale-play-btn" class="play-btn" title="再生/停止" data-i18n-title="play-title">▶</button>
+      <div class="seekbar-wrap">
+        <div class="seekbar-track-row">
+          <input type="range" id="scale-seekbar" min="0" max="1000" value="0" class="seekbar">
+        </div>
+        <div class="scale-seekbar-label" id="scale-sim-date-label">--</div>
+      </div>
+    </section>
+
     <!-- 24hシークバー: 画面下部・メニュー以外の全シーンで表示（スマホでの片手操作用） -->
     <section id="scene-playback" class="playback" style="display: none">
       <button id="play-btn" class="play-btn" title="24時間シミュレーション 再生/停止" data-i18n-title="play-title">▶</button>

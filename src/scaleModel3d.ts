@@ -75,6 +75,17 @@ export class ScaleModel3D {
   // カメラ情報の常時表示UI（テキスト）
   private debugHudEl = document.getElementById('scale-debug-hud')
 
+  // 時間バー（日/月/年切り替え・シークバー・再生/停止。issue #004）
+  private modeButtons = {
+    day: document.getElementById('scale-mode-day') as HTMLButtonElement,
+    month: document.getElementById('scale-mode-month') as HTMLButtonElement,
+    year: document.getElementById('scale-mode-year') as HTMLButtonElement,
+  }
+  private playbackPlayBtn = document.getElementById('scale-play-btn') as HTMLButtonElement
+  private playbackSeekbar = document.getElementById('scale-seekbar') as HTMLInputElement
+  private playbackDateLabel = document.getElementById('scale-sim-date-label') as HTMLElement
+  private static readonly SEEKBAR_MAX = 1000
+
   // カメラの向きインジケーター: メインの3Dワールドとは独立した固定サイズのミニビューポートに
   // 座標軸モデルを描画し、メインカメラの「向き」だけを毎フレーム同期する（位置・ズームは無視）
   private gizmoScene: THREE.Scene
@@ -324,6 +335,18 @@ export class ScaleModel3D {
     }
     window.addEventListener('keydown', this.onKeyDown)
 
+    // 時間バー: 日/月/年切り替え・シークバー・再生/停止（issue #004）
+    for (const key of ['day', 'month', 'year'] as const) {
+      this.modeButtons[key].addEventListener('click', () => this.setSimMode(key))
+    }
+    this.playbackPlayBtn.addEventListener('click', () => this.togglePlayback())
+    this.playbackSeekbar.addEventListener('input', () => {
+      // 手動でシークバーを動かしたら再生を止める（既存の24hシミュレーションと同じ挙動）
+      this.playback.pause()
+      this.playback.seekFraction(parseInt(this.playbackSeekbar.value, 10) / ScaleModel3D.SEEKBAR_MAX)
+    })
+    this.updatePlaybackUI() // ボタンの見た目・シークバー・ラベルを初期状態に同期する
+
     this.handleResize()
     window.addEventListener('resize', () => this.handleResize())
     this.startLoop()
@@ -566,6 +589,27 @@ export class ScaleModel3D {
   /** UI表示用: 現在シミュレーションしている日時 */
   get simulatedDate(): Date {
     return this.currentSimDate()
+  }
+
+  /** 日モードは日時まで、月/年モードは日付までを表示する（分単位は誤差の範囲で意味が薄いため） */
+  private static formatSimDate(date: Date, mode: SimMode): string {
+    const pad = (n: number) => String(n).padStart(2, '0')
+    const dateStr = `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
+    if (mode === 'day') return `${dateStr} ${pad(date.getHours())}:${pad(date.getMinutes())}`
+    return dateStr
+  }
+
+  /** 時間バー(モードボタンの見た目・シークバーの位置・再生ボタンのアイコン・日時ラベル)を毎フレーム同期する */
+  private updatePlaybackUI() {
+    for (const key of ['day', 'month', 'year'] as const) {
+      this.modeButtons[key].classList.toggle('active', key === this.simMode)
+    }
+    this.playbackPlayBtn.textContent = this.playback.isPlaying ? '⏸' : '▶'
+    // 常にplayback.fractionをそのまま反映する。ユーザーのドラッグ('input'イベント)は既に
+    // playback.seekFraction()へ即時反映済みなので、ここでの同期は既存の値をなぞるだけで
+    // 競合しない。再生中の進行だけでなく、モード切り替え直後のリセット(→0)もこれで反映される
+    this.playbackSeekbar.value = String(Math.round(this.playback.fraction * ScaleModel3D.SEEKBAR_MAX))
+    this.playbackDateLabel.textContent = ScaleModel3D.formatSimDate(this.currentSimDate(), this.simMode)
   }
 
   // ラベルの当たり判定は常に画面上一定サイズの箱として扱う（本体をタップするより少し広めに取り、
@@ -1033,6 +1077,7 @@ export class ScaleModel3D {
       this.playback.tick(dt)
       const earthOrbitAngle = this.computeOrbitalPositions(this.currentSimDate())
       this.syncSceneToOrbitalState(earthOrbitAngle)
+      this.updatePlaybackUI()
       this.controls.update()
       this.updateLabels()
       this.updateDebugHud()
