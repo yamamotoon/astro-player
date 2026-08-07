@@ -5,6 +5,7 @@ import { Compass2D } from './compass2d'
 import { getAstroData, formatTime } from './astroCalc'
 import { ARView } from './ar'
 import { ScaleModel3D } from './scaleModel3d'
+import { PlaybackController } from './playbackController'
 
 type SceneName = 'menu' | 'dashboard' | 'sky' | 'scale'
 
@@ -106,10 +107,12 @@ backToMenuBtn.addEventListener('click', () => showScene('menu'))
 const langBtn = document.getElementById('lang-btn') as HTMLButtonElement
 const playBtn = document.getElementById('play-btn') as HTMLButtonElement
 const seekbar = document.getElementById('seekbar') as HTMLInputElement
-let isPlaying = false
+const ANIM_DURATION_MS = 24_000 // 24秒で24時間（1秒=1時間）
+const DAY_MS = 24 * 60 * 60 * 1000
+const playback = new PlaybackController(DAY_MS, ANIM_DURATION_MS)
 
 function updateSeekbar(date: Date) {
-  if (isPlaying) return // アニメーション中は applySimMinute 側が管理
+  if (playback.isPlaying) return // アニメーション中はplayback駆動のanimLoop側が管理
   const minutes = date.getHours() * 60 + date.getMinutes()
   seekbar.value = String(minutes)
 }
@@ -255,11 +258,7 @@ langBtn.addEventListener('click', () => {
 })
 
 // ---- 24時間シミュレーション ----
-const ANIM_DURATION_MS = 24_000 // 24秒で24時間（1秒=1時間）
-
-let animStartTime: number | null = null
-let animStartMinute = 0
-let animRafId: number | null = null
+// ANIM_DURATION_MS/DAY_MS/playbackは既にファイル冒頭側(状態変数・DOM参照)で定義済み
 
 function getBaseDate(): Date {
   const d = new Date(datetimeInput.value)
@@ -280,41 +279,22 @@ function applySimMinute(minute: number) {
 }
 
 function stopAnim() {
-  isPlaying = false
+  playback.pause()
   playBtn.textContent = '▶'
-  if (animRafId !== null) {
-    cancelAnimationFrame(animRafId)
-    animRafId = null
-  }
-}
-
-function animStep(timestamp: number) {
-  if (!isPlaying) return
-  if (animStartTime === null) animStartTime = timestamp
-  const elapsed = timestamp - animStartTime
-  const minute = animStartMinute + (elapsed / ANIM_DURATION_MS) * 1440
-  if (minute >= 1440) {
-    applySimMinute(1439)
-    stopAnim()
-    return
-  }
-  applySimMinute(minute)
-  animRafId = requestAnimationFrame(animStep)
 }
 
 function startAnim() {
-  animStartMinute = parseInt(seekbar.value) || 0
-  if (animStartMinute >= 1439) animStartMinute = 0
-  animStartTime = null
-  isPlaying = true
+  // 既存動作を踏襲: シークバーが終端付近(1439分=23:59)にある状態で再生すると先頭に戻る
+  const startMinute = parseInt(seekbar.value) || 0
+  playback.seekMs((startMinute >= 1439 ? 0 : startMinute) * 60_000)
+  playback.play()
   playBtn.textContent = '⏸'
   realtimeCheck.checked = false
   stopRealtime()
-  animRafId = requestAnimationFrame(animStep)
 }
 
 playBtn.addEventListener('click', () => {
-  if (isPlaying) stopAnim()
+  if (playback.isPlaying) stopAnim()
   else startAnim()
 })
 
@@ -324,3 +304,16 @@ seekbar.addEventListener('input', () => {
   stopRealtime()
   applySimMinute(parseInt(seekbar.value))
 })
+
+// 継続的なrAFループ。playback.tick()は再生中でなければ何もしないため、常時回しっぱなしでよい
+let lastAnimTime: number | null = null
+function animLoop(timestamp: number) {
+  requestAnimationFrame(animLoop)
+  const dt = lastAnimTime === null ? 0 : (timestamp - lastAnimTime) / 1000
+  lastAnimTime = timestamp
+  if (!playback.isPlaying) return
+  playback.tick(dt)
+  applySimMinute(playback.elapsedMilliseconds / 60_000)
+  if (!playback.isPlaying) playBtn.textContent = '▶' // 周期終端に達して自動停止した場合
+}
+requestAnimationFrame(animLoop)
