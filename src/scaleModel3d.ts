@@ -1,7 +1,9 @@
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
+import SunCalc from 'suncalc'
 import { t } from './i18n'
 import earthTextureUrl from './assets/earth-texture.png'
+import { PlaybackController } from './playbackController'
 
 // ---- 実際の物理値(km)。月半径=1になるよう、常にこれらから比率を算出する ----
 const MOON_RADIUS_KM = 1737
@@ -16,8 +18,9 @@ const SUN_R = SUN_RADIUS_KM / MOON_RADIUS_KM
 const EARTH_MOON_DIST = EARTH_MOON_DIST_KM / MOON_RADIUS_KM
 const EARTH_SUN_DIST = EARTH_SUN_DIST_KM / MOON_RADIUS_KM
 
-// 太陽を原点（この系で唯一動かない基準点）、Y=公転面(黄道面=XZ平面)の法線、
-// 地球は+X方向、月は地球から+Z方向（v1は単純な固定配置。軌道運動は未実装）
+// 太陽を原点（この系で唯一動かない基準点）、Y=公転面(黄道面=XZ平面)の法線。
+// 地球・月の位置は円軌道で簡略化した公転運動により、毎フレームcomputeOrbitalPositions()が
+// この2つのVector3を書き換える（他の箇所はこのオブジェクトへの参照を持ち続けるだけでよい）
 const SUN_POS = new THREE.Vector3(0, 0, 0)
 const EARTH_POS = new THREE.Vector3(EARTH_SUN_DIST, 0, 0)
 const MOON_POS = new THREE.Vector3(EARTH_SUN_DIST, 0, EARTH_MOON_DIST)
@@ -35,6 +38,7 @@ const FOCUSABLE = [
 ] as const
 
 type BodyKey = 'sun' | 'earth' | 'moon'
+export type SimMode = 'day' | 'month' | 'year'
 
 export class ScaleModel3D {
   private renderer: THREE.WebGLRenderer
@@ -104,7 +108,33 @@ export class ScaleModel3D {
   // 一切触れないので見た目が変わらない）
   private outlineByKey!: Record<BodyKey, THREE.Mesh>
 
+  // ---- 時間連動（自転・公転・シークバー） ----
+  // シークバーの起点(0%)は常に「モードに入った時点の実時刻」。そこから未来方向にのみ進む
+  // （モード切り替えのたびに現在時刻へリセットする。issue #004参照）
+  private simAnchorDate = new Date()
+  private simMode: SimMode = 'day'
+  private playback = new PlaybackController(ScaleModel3D.SIM_PERIOD_MS.day, ScaleModel3D.SIM_REAL_DURATION_MS)
+  // 地球の地軸傾斜の基準姿勢（EARTH_AXIS方向にローカルY軸を向けた回転）。毎フレームこれに
+  // その時点の自転角度を合成して絶対的な向きを求める（フレーム差分の累積だと、シークバーで
+  // 巻き戻した時に正しい向きに戻せないため）
+  private earthTiltQuaternion = new THREE.Quaternion()
+  private earthAxisLine!: THREE.Line
+  private sunLightTarget!: THREE.Object3D
+
+  private static readonly DAY_MS = 24 * 60 * 60 * 1000
+  private static readonly SIM_PERIOD_MS: Record<SimMode, number> = {
+    day: ScaleModel3D.DAY_MS,
+    month: 30 * ScaleModel3D.DAY_MS,
+    year: 365 * ScaleModel3D.DAY_MS,
+  }
+  // 日/月/年どのモードも、既存の24hシミュレーションと同じ体感速度（1周期を24秒で再生）に揃える
+  private static readonly SIM_REAL_DURATION_MS = 24_000
+
   constructor(canvas: HTMLCanvasElement) {
+    // カメラの初期位置がEARTH_POSを参照するため、メッシュ等を作る前に一度、実際の現在時刻
+    // (simAnchorDate、フィールド初期化子で既に設定済み)に基づく公転位置を計算しておく
+    this.computeOrbitalPositions(this.currentSimDate())
+
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true })
     this.renderer.setPixelRatio(window.devicePixelRatio)
     this.renderer.setClearColor(0x05051a)
@@ -160,9 +190,10 @@ export class ScaleModel3D {
     // SphereGeometryのUV規約ではテクスチャの北極/南極はメッシュのローカルY軸上に来る。
     // 初期状態のままだとローカルY軸=ワールドY軸（傾き0°）のため、EARTH_AXIS（23.44度傾いた軸）で
     // 自転させるとテクスチャの極とEARTH_AXISが一致せず、自転につれて極がぶれてしまう。
-    // ここで一度だけローカルY軸をEARTH_AXISへ向けておくことで、以降のrotateOnWorldAxis(EARTH_AXIS,…)が
-    // 極を動かさず赤道面だけを回すようになる
-    this.earthMesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), EARTH_AXIS)
+    // ここで基準姿勢としてローカルY軸をEARTH_AXISへ向けておき、毎フレームsyncSceneToOrbitalState()が
+    // この姿勢に自転角度を合成することで、極を動かさず赤道面だけを回すようになる
+    this.earthTiltQuaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), EARTH_AXIS)
+    this.earthMesh.quaternion.copy(this.earthTiltQuaternion)
     this.scene.add(this.earthMesh)
 
     // 地球の自転軸（デバッグ表示）: 公転軸(Y)から実際の地軸傾斜23.44度だけ傾いた向きに描画する。
@@ -172,11 +203,11 @@ export class ScaleModel3D {
       EARTH_AXIS.clone().multiplyScalar(-axisLen),
       EARTH_AXIS.clone().multiplyScalar(axisLen),
     ])
-    const earthAxis = new THREE.Line(axisGeo, new THREE.LineBasicMaterial({
+    this.earthAxisLine = new THREE.Line(axisGeo, new THREE.LineBasicMaterial({
       color: 0xaa7777, transparent: true, opacity: 0.4,
     }))
-    earthAxis.position.copy(EARTH_POS)
-    this.scene.add(earthAxis)
+    this.earthAxisLine.position.copy(EARTH_POS)
+    this.scene.add(this.earthAxisLine)
 
     this.moonMesh = new THREE.Mesh(
       new THREE.SphereGeometry(MOON_R, 16, 12),
@@ -190,9 +221,10 @@ export class ScaleModel3D {
     // Sun→Earthの1本のDirectionalLightを共用する
     const sunLight = new THREE.DirectionalLight(0xffffff, 1.6)
     sunLight.position.copy(SUN_POS)
-    sunLight.target.position.copy(EARTH_POS)
+    this.sunLightTarget = sunLight.target
+    this.sunLightTarget.position.copy(EARTH_POS)
     this.scene.add(sunLight)
-    this.scene.add(sunLight.target)
+    this.scene.add(this.sunLightTarget)
     // 夜側が完全な真っ黒にならないよう、控えめな環境光を足す
     this.scene.add(new THREE.AmbientLight(0xffffff, 0.35))
 
@@ -414,6 +446,126 @@ export class ScaleModel3D {
     center.divideScalar(FOCUSABLE.length)
 
     this.moveCameraTo(center, this.frameDistanceForBodies(FOCUSABLE, center, 1.15))
+  }
+
+  // ---- 時間連動（自転・公転・シークバー。issue #004） ----
+
+  private currentSimDate(): Date {
+    return new Date(this.simAnchorDate.getTime() + this.playback.elapsedMilliseconds)
+  }
+
+  /** その年の1月1日からの経過日数の割合(0〜1未満)。円軌道の公転角度の基準に使う簡略計算 */
+  private static dayOfYearFraction(date: Date): number {
+    const startOfYear = new Date(date.getFullYear(), 0, 1, 0, 0, 0, 0)
+    const days = (date.getTime() - startOfYear.getTime()) / ScaleModel3D.DAY_MS
+    return (days / 365.25) % 1
+  }
+
+  /**
+   * 円軌道で簡略化した公転運動により、太陽・地球・月の位置関係からEARTH_POS/MOON_POSを書き換える
+   * （メッシュ等のシーングラフには触れない。syncSceneToOrbitalState()が別途反映する）。
+   * 地球の公転角度は年内の経過日数から、月の公転角度は実際の月相(SunCalcの実測値。新月=0で
+   * 地球と太陽の間、満月=0.5で太陽の反対側)を基準にしている
+   */
+  private computeOrbitalPositions(date: Date): number {
+    const earthAngle = ScaleModel3D.dayOfYearFraction(date) * Math.PI * 2
+    EARTH_POS.set(Math.cos(earthAngle) * EARTH_SUN_DIST, 0, Math.sin(earthAngle) * EARTH_SUN_DIST)
+
+    const moonPhase = SunCalc.getMoonIllumination(date).phase // 0(新月)〜1(次の新月)
+    const sunwardAngle = earthAngle + Math.PI // 地球から見て太陽がある方向
+    const moonAngle = sunwardAngle + moonPhase * Math.PI * 2
+    MOON_POS.set(
+      EARTH_POS.x + Math.cos(moonAngle) * EARTH_MOON_DIST,
+      0,
+      EARTH_POS.z + Math.sin(moonAngle) * EARTH_MOON_DIST
+    )
+    return earthAngle
+  }
+
+  // 自転角度の基準（EARTH_AXIS周りの角度を測るための、軸に直交する2つの基準ベクトル）。
+  // EARTH_AXISはZ成分を持たない（Yを Z軸周りに傾けているだけ）ため(0,0,1)と直交する
+  private static readonly EARTH_AXIS_REF1 = new THREE.Vector3(0, 0, 1)
+  private earthAxisRef2 = new THREE.Vector3().crossVectors(EARTH_AXIS, ScaleModel3D.EARTH_AXIS_REF1).normalize()
+
+  private angleAroundEarthAxis(v: THREE.Vector3): number {
+    return Math.atan2(v.dot(this.earthAxisRef2), v.dot(ScaleModel3D.EARTH_AXIS_REF1))
+  }
+
+  /**
+   * UTC時刻から、赤道上で今どの経度が太陽の正面（南中）にあるかを求める（分点補正は考慮しない
+   * 簡略計算）。UTC12時に経度0（グリニッジ）が南中する
+   */
+  private static subsolarLonRad(date: Date): number {
+    const utcHours = date.getUTCHours() + date.getUTCMinutes() / 60 + date.getUTCSeconds() / 3600
+    const lonDeg = ((12 - utcHours) * 15 + 180) % 360 - 180
+    return THREE.MathUtils.degToRad(lonDeg < -180 ? lonDeg + 360 : lonDeg)
+  }
+
+  /**
+   * SphereGeometryの頂点式(vertex.x=-r·cosφ, vertex.z=r·sinφ, φ=π+lon)から逆算した、
+   * 経度→メッシュのローカル座標系での方向（回転前、赤道上）
+   */
+  private static localDirForLon(lonRad: number): THREE.Vector3 {
+    return new THREE.Vector3(Math.cos(lonRad), 0, -Math.sin(lonRad))
+  }
+
+  /** computeOrbitalPositions()で求めたEARTH_POS/MOON_POSと、その時点の自転角度をシーンに反映する */
+  private syncSceneToOrbitalState(earthOrbitAngle: number) {
+    this.earthMesh.position.copy(EARTH_POS)
+    this.moonMesh.position.copy(MOON_POS)
+    this.earthAxisLine.position.copy(EARTH_POS)
+    this.sunLightTarget.position.copy(EARTH_POS)
+
+    // 自転角度は「フレームごとの差分回転」ではなく、経過時間から絶対角度を求めて毎フレーム
+    // 姿勢を再計算する（差分の累積だとシークバーで巻き戻した時に正しい向きに戻せないため）。
+    // かつ、単なる時刻の端数ではなく「実際に今どの経度が太陽側を向くべきか」から逆算することで、
+    // 地球儀のテクスチャ上の実在の経度（例: 日本 135°E）が実際の昼夜と対応するようにする
+    const date = this.currentSimDate()
+    const subsolarLon = ScaleModel3D.subsolarLonRad(date)
+    const localDir = ScaleModel3D.localDirForLon(subsolarLon)
+    const tiltedDir = localDir.applyQuaternion(this.earthTiltQuaternion)
+    const tiltedAngle = this.angleAroundEarthAxis(tiltedDir)
+
+    const sunwardAngle = earthOrbitAngle + Math.PI // 地球から見た太陽の方向。computeOrbitalPositions()と同じ定義
+    const sunwardDir = new THREE.Vector3(Math.cos(sunwardAngle), 0, Math.sin(sunwardAngle))
+    const targetAngle = this.angleAroundEarthAxis(sunwardDir)
+
+    const spinAngle = targetAngle - tiltedAngle
+    const spinQuat = new THREE.Quaternion().setFromAxisAngle(EARTH_AXIS, spinAngle)
+    this.earthMesh.quaternion.copy(spinQuat).multiply(this.earthTiltQuaternion)
+  }
+
+  /** 日/月/年モードを切り替える。シークバーは常に現在時刻を起点に先頭へリセットする */
+  setSimMode(mode: SimMode) {
+    this.simMode = mode
+    this.simAnchorDate = new Date()
+    this.playback.setPeriod(ScaleModel3D.SIM_PERIOD_MS[mode])
+    this.playback.reset()
+  }
+
+  get currentSimMode(): SimMode {
+    return this.simMode
+  }
+
+  togglePlayback() {
+    this.playback.togglePlay()
+  }
+
+  get isPlaybackPlaying(): boolean {
+    return this.playback.isPlaying
+  }
+
+  seekPlaybackFraction(f: number) {
+    this.playback.seekFraction(f)
+  }
+
+  get playbackFraction(): number {
+    return this.playback.fraction
+  }
+
+  /** UI表示用: 現在シミュレーションしている日時 */
+  get simulatedDate(): Date {
+    return this.currentSimDate()
   }
 
   // ラベルの当たり判定は常に画面上一定サイズの箱として扱う（本体をタップするより少し広めに取り、
@@ -872,16 +1024,15 @@ export class ScaleModel3D {
     this.camera.updateProjectionMatrix()
   }
 
-  // 地球の自転速度: このアプリの24hシミュレーション（実時間1秒=1時間、24秒で1日）の換算に合わせる
-  private static readonly EARTH_SPIN_RAD_PER_SEC = (Math.PI * 2) / 24
-
   private startLoop() {
     let lastTime: number | null = null
     const loop = (time: number) => {
       this.rafId = requestAnimationFrame(loop)
       const dt = lastTime === null ? 0 : (time - lastTime) / 1000
       lastTime = time
-      this.earthMesh.rotateOnWorldAxis(EARTH_AXIS, ScaleModel3D.EARTH_SPIN_RAD_PER_SEC * dt)
+      this.playback.tick(dt)
+      const earthOrbitAngle = this.computeOrbitalPositions(this.currentSimDate())
+      this.syncSceneToOrbitalState(earthOrbitAngle)
       this.controls.update()
       this.updateLabels()
       this.updateDebugHud()
