@@ -1003,8 +1003,10 @@ export class ScaleModel3D {
     ) => {
       const dx = lx - sphere.x, dy = ly - sphere.y
       const dist = Math.hypot(dx, dy)
+      // 中心が完全一致した場合(初期状態はここが必ず発火する)の既定の押し出し方向。
+      // ここが実質的にラベルの既定位置(天体の下)を決めている
       const nx = dist < 1e-6 ? 0 : dx / dist
-      const ny = dist < 1e-6 ? 1 : dy / dist
+      const ny = dist < 1e-6 ? -1 : dy / dist
       const required = sphereEdgeTan(sphere.r) + labelEdgeDistTo(nx, ny, textHalfW, textHalfH) + extraGapTan
       const overlap = required - dist
       if (overlap <= 0) return null
@@ -1054,20 +1056,20 @@ export class ScaleModel3D {
       const overlap = ar + br - dist
       if (overlap <= 0) return null
       // 中心が完全に一致（ラベル生成直後、天体本体の真上にいる場合など）はフォールバック方向を使う
-      return dist < 1e-6 ? { nx: 0, ny: 1, overlap } : { nx: dx / dist, ny: dy / dist, overlap }
+      return dist < 1e-6 ? { nx: 0, ny: -1, overlap } : { nx: dx / dist, ny: dy / dist, overlap }
     }
 
     for (let iter = 0; iter < ScaleModel3D.LABEL_COLLISION_ITERATIONS; iter++) {
       // ① ラベル同士（実測テキストサイズを使う。箱基準のlabelRadiusのままだと、天体同士が
-      // 画面上で接近する場面でここが支配的になり、②の精密な距離コントロールを台無しにする）
+      // 画面上で接近する場面でここが支配的になり、②の精密な距離コントロールを台無しにする）。
+      // labels配列は[太陽,地球,月]の優先順位の並びそのもの: iの方がjより常に優先度が高いので、
+      // 優先度の高いa(親)は動かさず、低いb(子)だけを重なり量ぶん全量押し出す
       for (let i = 0; i < labels.length; i++) {
         for (let j = i + 1; j < labels.length; j++) {
           const a = labels[i], b = labels[j]
           const hit = overlapOf(a.x, a.y, textRadii[i], b.x, b.y, textRadii[j])
           if (!hit) continue
-          const push = hit.overlap / 2
-          a.x -= hit.nx * push; a.y -= hit.ny * push
-          b.x += hit.nx * push; b.y += hit.ny * push
+          b.x += hit.nx * hit.overlap; b.y += hit.ny * hit.overlap
         }
       }
       // ② ラベル と 天体本体（自分の球も含め、全ての球から押し出す）。overlapSphereLabelが
