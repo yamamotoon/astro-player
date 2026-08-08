@@ -38,6 +38,14 @@ const FOCUSABLE = [
 ] as const
 
 type BodyKey = 'sun' | 'earth' | 'moon'
+
+// 「系全体」ボタンで使う、その天体の衛星の公転半径（issue #006）。今日の実際の衛星の位置ではなく
+// 公転半径そのものを使うことで、衛星が軌道上のどこにいても画面外に出ない、日付に依存しない距離に
+// なる。月には衛星が無いためエントリが無い（UI側でボタン自体を隠す）
+const SATELLITE_ORBIT_RADIUS: Partial<Record<BodyKey, number>> = {
+  sun: EARTH_SUN_DIST,
+  earth: EARTH_MOON_DIST,
+}
 export type SimMode = 'day' | 'month' | 'year'
 
 export class ScaleModel3D {
@@ -106,9 +114,16 @@ export class ScaleModel3D {
   private activePointerCount = 0
   private static readonly TAP_MOVE_THRESHOLD_PX = 6
 
-  // 選択状態: カメラは動かさず、押した天体を選択に追加/フォーカスするだけの状態（updateLabels()の
-  // ラベル強調・updateSelectionGlow()の天体発光・focusOnSelection()の対象として使う）
-  private selected = new Set<BodyKey>()
+  // 注視点として選んでいる天体。常に天体1つだけを指す（issue #006）。カメラを動かすのは
+  // 「フォーカス」「系全体」ボタンだけで、タップ自体はこの対象を切り替えるだけでカメラは動かさない
+  private targetBody: BodyKey = 'sun'
+  private targetFocusBtn = document.getElementById('scale-target-focus-btn') as HTMLButtonElement
+  private targetSystemBtn = document.getElementById('scale-target-system-btn') as HTMLButtonElement
+
+  // 対象の天体へのカメラ追従（issue #005）。前フレームの位置との差分だけ注視点・カメラ位置の
+  // 両方に加算する「平行移動」方式。対象が変わった瞬間はhandleTap()側でnullにリセットされ、
+  // いきなり大きくジャンプしないようにする
+  private lastTrackedPos: THREE.Vector3 | null = null
 
   // キー付きで天体を引けるようにするルックアップ（当たり判定・選択・フォーカスで使う）
   private meshByKey!: Record<BodyKey, THREE.Mesh>
@@ -181,6 +196,9 @@ export class ScaleModel3D {
     this.controls.dampingFactor = 0.08
     this.controls.minDistance = MOON_R * 3
     this.controls.maxDistance = EARTH_SUN_DIST * 1.5
+    // パンは廃止（issue #005）。天体への追従が注視点を動かし続けるため、パンで手動でも
+    // 注視点を動かせるようにすると常に競合する。回転・ズームは注視点を動かさないため影響しない
+    this.controls.enablePan = false
 
     // 太陽は光源そのものなので陰影の要らないMeshBasicMaterialのまま（常に一定の明るさで見せる）
     this.sunMesh = new THREE.Mesh(
@@ -328,12 +346,17 @@ export class ScaleModel3D {
     canvas.addEventListener('pointercancel', this.onPointerCancel)
 
     // 「Home」キーで全天体がフレームに収まる位置へ（3Dツールの定番ショートカット）。
-    // Enter/Fキーは選択中の天体へのフォーカス（タップでの再選択と同じ効果のPC向け近道）
+    // Enter/Fキーは対象の天体へのフォーカス（フォーカスボタンと同じ効果のPC向け近道）
     this.onKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Home') this.frameAll()
-      if (e.key === 'Enter' || e.key === 'f' || e.key === 'F') this.focusOnSelection()
+      if (e.key === 'Enter' || e.key === 'f' || e.key === 'F') this.focusOnTarget()
     }
     window.addEventListener('keydown', this.onKeyDown)
+
+    // 「フォーカス」「系全体」ボタン（issue #006）。対象の天体は変えず、カメラの距離だけを
+    // プリセットの距離にジャンプさせる。そこから先の手動ズーム・回転は制限しない
+    this.targetFocusBtn.addEventListener('click', () => this.focusOnTarget())
+    this.targetSystemBtn.addEventListener('click', () => this.focusOnSystemView())
 
     // 時間バー: 日/月/年切り替え・シークバー・再生/停止（issue #004）
     for (const key of ['day', 'month', 'year'] as const) {
@@ -348,6 +371,12 @@ export class ScaleModel3D {
     this.updatePlaybackUI() // ボタンの見た目・シークバー・ラベルを初期状態に同期する
 
     this.handleResize()
+
+    // 起動時: targetBodyの初期値(太陽)の「系全体」（地球が軌道上のどこにいても収まる距離）から
+    // スタートする。handleResize()の後に呼ぶことで、正しいアスペクト比で距離を計算できる
+    this.focusOnSystemView()
+    this.updateTargetButtonsUI()
+
     window.addEventListener('resize', () => this.handleResize())
     this.startLoop()
   }
@@ -452,6 +481,45 @@ export class ScaleModel3D {
       aspect: +this.camera.aspect.toFixed(4),
       margin, required: +required.toFixed(2), distance: +distance.toFixed(2),
       bodies: perBodyLog,
+    })
+    return distance
+  }
+
+  /**
+   * frameDistanceForBodies()の「今の視線方向基準」の考え方を、衛星の公転軌道
+   * （中心＝対象の天体位置、XZ平面上の半径orbitRadiusの円。issue #004の円軌道簡略化と同じ平面）
+   * に適用したもの。円上の点φごとの必要距離 need(φ) = dot(dir,φ) + max(|dot(right,φ)|/tanH, |dot(up,φ)|/tanV)
+   * は、絶対値をmax(+,-)に展開すると4本の単一正弦波 dot(dir±right/tanH, φ) / dot(dir±up/tanV, φ) の
+   * 各点ごとの最大値になり、「φについてのmaxのmax」は展開前後で入れ替え可能なため、
+   * 円全体でのneed(φ)の最大値は、この4本それぞれの振幅（sqrt(v.x²+v.z²)、三角関数の合成公式）の
+   * 最大値に等しい。円上の全φを走査せずに厳密解が求まる（ブルートフォースサンプリングで検証済み）
+   */
+  private frameDistanceForOrbit(orbitRadius: number, margin: number): number {
+    const dir = this.camera.position.clone().sub(this.controls.target)
+    if (dir.lengthSq() < 1e-9) dir.set(1, 0.6, 1)
+    dir.normalize()
+    const right = new THREE.Vector3(1, 0, 0).applyQuaternion(this.camera.quaternion)
+    const up = new THREE.Vector3(0, 1, 0).applyQuaternion(this.camera.quaternion)
+
+    const vFovRad = THREE.MathUtils.degToRad(this.camera.fov)
+    const hFovRad = 2 * Math.atan(Math.tan(vFovRad / 2) * this.camera.aspect)
+    const tanV = Math.tan(vFovRad / 2)
+    const tanH = Math.tan(hFovRad / 2)
+
+    const amplitudeXZ = (v: THREE.Vector3) => Math.hypot(v.x, v.z)
+    const rW = right.clone().divideScalar(tanH)
+    const uV = up.clone().divideScalar(tanV)
+    const required = orbitRadius * Math.max(
+      amplitudeXZ(dir.clone().add(rW)),
+      amplitudeXZ(dir.clone().sub(rW)),
+      amplitudeXZ(dir.clone().add(uV)),
+      amplitudeXZ(dir.clone().sub(uV)),
+    )
+    const distance = Math.max(required, 0) * margin
+    console.log('[ScaleModel3D] frameDistanceForOrbit', {
+      orbitRadius: +orbitRadius.toFixed(2),
+      dir: dir.toArray().map(v => +v.toFixed(4)),
+      margin, required: +required.toFixed(2), distance: +distance.toFixed(2),
     })
     return distance
   }
@@ -617,21 +685,16 @@ export class ScaleModel3D {
   private static readonly LABEL_HIT_PADDING = 1.5
 
   /**
-   * 天体を押した(クリック/タップ)時の処理。「未選択の天体を押す→選択に追加」
-   * 「既に選択されている天体を押す→選択中の天体すべてにフォーカス」
-   * 「何もない場所を押す→選択解除」の1ルールで統一する
+   * 天体を押した(クリック/タップ)時の処理（issue #006）。押した天体を対象(targetBody)に
+   * 置き換えるだけで、カメラは一切動かさない（カメラを動かすのは「フォーカス」「系全体」
+   * ボタンだけ）。既に対象になっている天体を押した場合、何もない場所を押した場合は無視する
    */
   private handleTap(clientX: number, clientY: number) {
     const hit = this.hitTestBody(clientX, clientY)
-    if (!hit) {
-      this.selected.clear()
-      return
-    }
-    if (this.selected.has(hit)) {
-      this.focusOnSelection()
-    } else {
-      this.selected.add(hit)
-    }
+    if (!hit || hit === this.targetBody) return
+    this.targetBody = hit
+    this.lastTrackedPos = null // 対象が変わった瞬間なので追従の基準点をリセットする
+    this.updateTargetButtonsUI()
   }
 
   /**
@@ -676,19 +739,48 @@ export class ScaleModel3D {
     return null
   }
 
-  /** 選択中の天体すべてがちょうど画面に収まる距離までカメラを移動する */
-  private focusOnSelection() {
-    const keys = Array.from(this.selected)
-    if (keys.length === 0) return
-    const bodies = keys.map(k => ({ pos: this.posByKey[k], radius: this.radiusByKey[k] }))
-    if (bodies.length === 1) {
-      this.focusOn(bodies[0].pos, bodies[0].radius)
-      return
+  /** 対象の天体自体をじっくり見る距離までカメラを移動する（issue #006「フォーカス」ボタン） */
+  private focusOnTarget() {
+    this.focusOn(this.posByKey[this.targetBody], this.radiusByKey[this.targetBody])
+  }
+
+  /**
+   * 対象の天体の衛星の公転軌道（XZ平面上の半径orbitRadiusの円）が、今のカメラ視線方向で
+   * ちょうど収まる距離までカメラを移動する（issue #006「系全体」ボタン）。
+   * 「どの角度から見ても収まる」保証はあえて持たせない: カメラは回転しない前提でフィットし、
+   * 後で手動回転して衛星が画面外に出た場合は、ユーザーが同じボタンをもう一度押してその向きで
+   * 合わせ直す運用（frameAll()と同じ「今の視線方向基準」の考え方）。
+   * 衛星を持たない天体(月)はUI側でボタン自体を隠す
+   */
+  private focusOnSystemView() {
+    const orbitRadius = SATELLITE_ORBIT_RADIUS[this.targetBody]
+    if (orbitRadius === undefined) return
+    const distance = Math.max(this.frameDistanceForOrbit(orbitRadius, 1.15), this.controls.minDistance)
+    this.moveCameraTo(this.posByKey[this.targetBody], distance)
+  }
+
+  /** 「系全体」ボタンの表示/非表示を対象の天体に応じて切り替える（衛星を持たない月では隠す） */
+  private updateTargetButtonsUI() {
+    this.targetSystemBtn.hidden = SATELLITE_ORBIT_RADIUS[this.targetBody] === undefined
+  }
+
+  /**
+   * 対象の天体にカメラを追従させる（issue #005）。天体は時間経過で動き続けるため、フォーカス時に
+   * 注視点を1回だけ合わせるだけだと、時間を進めるほど天体が画面からずれていく。前フレームの位置
+   * との差分(delta)だけ注視点・カメラ位置の両方に加算する「平行移動」にすることで、ユーザーが
+   * 設定した距離・見る角度は変えずに天体だけ追いかける。
+   * OrbitControlsは回転・ズームでは注視点を動かさずパンだけが動かすため、結果としてパンだけが
+   * 実質無効化される（次フレームで追従により上書きされるため）。
+   * 対象が変わった瞬間の基準点リセットはhandleTap()側で行う（lastTrackedPos = null）
+   */
+  private updateCameraTracking() {
+    const pos = this.posByKey[this.targetBody]
+    if (this.lastTrackedPos) {
+      const delta = pos.clone().sub(this.lastTrackedPos)
+      this.controls.target.add(delta)
+      this.camera.position.add(delta)
     }
-    const center = new THREE.Vector3()
-    for (const b of bodies) center.add(b.pos)
-    center.divideScalar(bodies.length)
-    this.moveCameraTo(center, this.frameDistanceForBodies(bodies, center, 1.15))
+    this.lastTrackedPos = pos.clone()
   }
 
   // 選択中の天体を示す輪郭殻の、本体からのはみ出し量（画面ピクセル基準。updateLabels()で
@@ -897,10 +989,10 @@ export class ScaleModel3D {
       const p = project(bodyPos)
       const h = 2 * labelHalfH * p.depth
       sprite.scale.set(h * 4, h, 1) // ラベル用canvasは256x64(4:1)なので幅は高さの4倍
-      // 選択中かどうかで、強調用の枠付きテクスチャに差し替える（当たり判定サイズは同じなので
+      // 対象の天体かどうかで、強調用の枠付きテクスチャに差し替える（当たり判定サイズは同じなので
       // ①②の押し出し計算には影響しない）
       const mat = sprite.material as THREE.SpriteMaterial
-      const wantMap = this.selected.has(key) ? this.labelMaps[key].selected : this.labelMaps[key].normal
+      const wantMap = key === this.targetBody ? this.labelMaps[key].selected : this.labelMaps[key].normal
       if (mat.map !== wantMap) { mat.map = wantMap; mat.needsUpdate = true }
       return { key, sprite, leader, bodyPos, depth: p.depth, baseX: p.x, baseY: p.y, x: p.x, y: p.y }
     }
@@ -961,11 +1053,11 @@ export class ScaleModel3D {
         .addScaledVector(right, (s.x - s.baseX) * s.depth)
         .addScaledVector(up, (s.y - s.baseY) * s.depth)
 
-      // 選択中の輪郭殻: 本体からのはみ出し量(OUTLINE_THICKNESS_PX)を毎フレーム画面ピクセル基準で
+      // 対象の天体の輪郭殻: 本体からのはみ出し量(OUTLINE_THICKNESS_PX)を毎フレーム画面ピクセル基準で
       // 一定に保つ。固定の拡大率(例: 1.12倍)のままだとズームアウトして天体が小さくなるほど
       // 輪郭も一緒に縮んで見えなくなってしまう（ラベルが常に一定サイズを保つのと同じ理由）
       const outline = this.outlineByKey[s.key]
-      outline.visible = this.selected.has(s.key)
+      outline.visible = s.key === this.targetBody
       if (outline.visible) {
         const bodyRadius = this.radiusByKey[s.key]
         const desiredRadius = bodyRadius + s.depth * pxToTan(ScaleModel3D.OUTLINE_THICKNESS_PX)
@@ -1078,6 +1170,7 @@ export class ScaleModel3D {
       const earthOrbitAngle = this.computeOrbitalPositions(this.currentSimDate())
       this.syncSceneToOrbitalState(earthOrbitAngle)
       this.updatePlaybackUI()
+      this.updateCameraTracking()
       this.controls.update()
       this.updateLabels()
       this.updateDebugHud()
