@@ -283,6 +283,12 @@ input[type="number"] {
   color: #a0c0ff;
 }
 
+.fullscreen-btn.active {
+  background: #1e3a6e;
+  border-color: #3a5a9e;
+  color: #a0c0ff;
+}
+
 /* フルスクリーン中のスタイル */
 main:fullscreen {
   display: flex;

@@ -30,13 +30,6 @@ const EARTH_AXIAL_TILT_DEG = 23.44
 const EARTH_AXIS = new THREE.Vector3(0, 1, 0)
   .applyAxisAngle(new THREE.Vector3(0, 0, 1), THREE.MathUtils.degToRad(EARTH_AXIAL_TILT_DEG))
 
-// クリックで注目対象を切り替えられる天体
-const FOCUSABLE = [
-  { pos: SUN_POS, radius: SUN_R },
-  { pos: EARTH_POS, radius: EARTH_R },
-  { pos: MOON_POS, radius: MOON_R },
-] as const
-
 type BodyKey = 'sun' | 'earth' | 'moon'
 
 // 「系全体」ボタンで使う、その天体の衛星の公転半径（issue #006）。今日の実際の衛星の位置ではなく
@@ -119,6 +112,14 @@ export class ScaleModel3D {
   private targetBody: BodyKey = 'sun'
   private targetFocusBtn = document.getElementById('scale-target-focus-btn') as HTMLButtonElement
   private targetSystemBtn = document.getElementById('scale-target-system-btn') as HTMLButtonElement
+
+  // デフォルメモード（実験的機能）: 天体モデルの見た目の大きさだけを拡大する。距離・軌道には
+  // 一切触れないため、位置に関するロジック(公転・時間再生)はこの状態を意識しなくてよい。
+  // フォーカス/全体表示のフィット計算・ラベルの当たり判定は見た目の大きさに追従させたいので、
+  // displayRadius()経由でこの倍率を加味する（ユーザー要望: 「現在の天体の倍率も含めて画面に
+  // フィットするようにしてほしい」）
+  private deformFactor: 1 | 10 = 1
+  private deformToggleBtn = document.getElementById('scale-deform-toggle-btn') as HTMLButtonElement
 
   // 対象の天体へのカメラ追従（issue #005）。前フレームの位置との差分だけ注視点・カメラ位置の
   // 両方に加算する「平行移動」方式。対象が変わった瞬間はhandleTap()側でnullにリセットされ、
@@ -254,8 +255,8 @@ export class ScaleModel3D {
     this.sunLightTarget.position.copy(EARTH_POS)
     this.scene.add(sunLight)
     this.scene.add(this.sunLightTarget)
-    // 夜側が完全な真っ黒にならないよう、控えめな環境光を足す
-    this.scene.add(new THREE.AmbientLight(0xffffff, 0.35))
+    // 夜側が完全な真っ黒にならない程度に、ごく控えめな環境光を足す
+    this.scene.add(new THREE.AmbientLight(0xffffff, 0.12))
 
     // ラベルは太陽・地球・月で常に画面上同じ大きさ・同じ「点からの距離」になるようにする
     // （ワールド座標の固定スケール/オフセットだと、ズームで距離が変わるたびに見た目の大きさや
@@ -357,6 +358,9 @@ export class ScaleModel3D {
     // プリセットの距離にジャンプさせる。そこから先の手動ズーム・回転は制限しない
     this.targetFocusBtn.addEventListener('click', () => this.focusOnTarget())
     this.targetSystemBtn.addEventListener('click', () => this.focusOnSystemView())
+
+    // デフォルメモード切り替え（実験的機能）
+    this.deformToggleBtn.addEventListener('click', () => this.toggleDeformMode())
 
     // 時間バー: 日/月/年切り替え・シークバー・再生/停止（issue #004）
     for (const key of ['day', 'month', 'year'] as const) {
@@ -532,11 +536,12 @@ export class ScaleModel3D {
 
   /** 太陽・地球・月すべてがカメラに収まる位置まで引く（Homeキー / 全体表示ボタン） */
   frameAll() {
+    const bodies = this.focusableBodies()
     const center = new THREE.Vector3()
-    for (const b of FOCUSABLE) center.add(b.pos)
-    center.divideScalar(FOCUSABLE.length)
+    for (const b of bodies) center.add(b.pos)
+    center.divideScalar(bodies.length)
 
-    this.moveCameraTo(center, this.frameDistanceForBodies(FOCUSABLE, center, 1.15))
+    this.moveCameraTo(center, this.frameDistanceForBodies(bodies, center, 1.15))
   }
 
   // ---- 時間連動（自転・公転・シークバー。issue #004） ----
@@ -741,7 +746,40 @@ export class ScaleModel3D {
 
   /** 対象の天体自体をじっくり見る距離までカメラを移動する（issue #006「フォーカス」ボタン） */
   private focusOnTarget() {
-    this.focusOn(this.posByKey[this.targetBody], this.radiusByKey[this.targetBody])
+    this.focusOn(this.posByKey[this.targetBody], this.displayRadius(this.targetBody))
+  }
+
+  /**
+   * 天体の「見た目の」半径。デフォルメモード中はmesh.scaleで見た目だけ拡大されているため、
+   * フィット計算・ラベル当たり判定など「画面上どれだけの大きさに見えるか」を基準にする箇所では
+   * radiusByKey（実寸半径）ではなくこちらを使う
+   */
+  private displayRadius(key: BodyKey): number {
+    return this.radiusByKey[key] * this.deformFactor
+  }
+
+  /** frameAll()・ラベル当たり判定で使う、今の見た目(デフォルメ倍率込み)の天体一覧 */
+  private focusableBodies(): { pos: THREE.Vector3; radius: number }[] {
+    return (['sun', 'earth', 'moon'] as const).map(key => ({
+      pos: this.posByKey[key], radius: this.displayRadius(key),
+    }))
+  }
+
+  /**
+   * デフォルメモード（実験的機能）の切り替え。天体モデルの見た目の大きさだけをdeformFactor倍にする。
+   * posByKey/軌道計算には一切触れないため、距離は常に実際の比率のまま。
+   * 輪郭殻(outlineByKey)は本体メッシュの子オブジェクトのため、親のscaleにより見た目の拡大は
+   * 自動的に追従する（updateLabels()側で輪郭線の太さだけ補正が必要。該当箇所のコメント参照）
+   */
+  private toggleDeformMode() {
+    this.deformFactor = this.deformFactor === 1 ? 10 : 1
+    for (const key of ['sun', 'earth', 'moon'] as const) {
+      this.meshByKey[key].scale.setScalar(this.deformFactor)
+    }
+    this.earthAxisLine.scale.setScalar(this.deformFactor)
+    this.controls.minDistance = MOON_R * this.deformFactor * 3
+    this.deformToggleBtn.textContent = this.deformFactor === 1 ? '×1' : '×10'
+    this.deformToggleBtn.classList.toggle('active', this.deformFactor !== 1)
   }
 
   /**
@@ -896,6 +934,8 @@ export class ScaleModel3D {
   private static readonly LABEL_COLLISION_ITERATIONS = 6
   // デバッグ用: 実際に当たり判定に使っている「ラベルのサイズ」の枠線表示のON/OFF
   private static readonly DEBUG_SHOW_LABEL_SIZE = false
+  // デバッグ用: カメラの位置・注視点・距離・回転角を常時表示するHUDのON/OFF
+  private static readonly DEBUG_SHOW_CAMERA_HUD = false
 
   /**
    * ラベルは基本的に天体の実座標にそのまま置く（オフセットなし＝天体本体と重なった状態から
@@ -1002,7 +1042,7 @@ export class ScaleModel3D {
       makeLabelState('moon', this.moonLabel, this.moonLeader, MOON_POS),
     ]
 
-    const spheres = FOCUSABLE.map(b => {
+    const spheres = this.focusableBodies().map(b => {
       const p = project(b.pos)
       return { x: p.x, y: p.y, r: b.radius / p.depth }
     })
@@ -1059,8 +1099,12 @@ export class ScaleModel3D {
       const outline = this.outlineByKey[s.key]
       outline.visible = s.key === this.targetBody
       if (outline.visible) {
+        // 殻は本体メッシュの子オブジェクトなので、このscaleは親のローカル空間(=実寸半径)基準。
+        // デフォルメモード中は親のmesh.scaleが既にdeformFactor倍されているため、ここは常に
+        // 実寸半径(radiusByKey)を使い、はみ出し量の項だけdeformFactorで割って打ち消しておく
+        // （そうしないと輪郭の太さ自体がdeformFactor倍に見えてしまう）
         const bodyRadius = this.radiusByKey[s.key]
-        const desiredRadius = bodyRadius + s.depth * pxToTan(ScaleModel3D.OUTLINE_THICKNESS_PX)
+        const desiredRadius = bodyRadius + (s.depth * pxToTan(ScaleModel3D.OUTLINE_THICKNESS_PX)) / this.deformFactor
         outline.scale.setScalar(desiredRadius / bodyRadius)
       }
 
@@ -1102,6 +1146,10 @@ export class ScaleModel3D {
   /** カメラの位置・注視点・距離・回転角（OrbitControls基準の方位角/極角）を常時表示するUI */
   private updateDebugHud() {
     if (!this.debugHudEl) return
+    if (!ScaleModel3D.DEBUG_SHOW_CAMERA_HUD) {
+      this.debugHudEl.textContent = ''
+      return
+    }
     const p = this.camera.position
     const t = this.controls.target
     const azimuthDeg = THREE.MathUtils.radToDeg(this.controls.getAzimuthalAngle())
