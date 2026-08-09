@@ -18,6 +18,19 @@ const SUN_R = SUN_RADIUS_KM / MOON_RADIUS_KM
 const EARTH_MOON_DIST = EARTH_MOON_DIST_KM / MOON_RADIUS_KM
 const EARTH_SUN_DIST = EARTH_SUN_DIST_KM / MOON_RADIUS_KM
 
+// ---- デフォルメモード（issue #007。実験的）----
+// 実際の相対サイズ比(約109:1)のままだと「認識できる大きさ」と「重ならない」が両立しないため、
+// デフォルメ時は太陽・地球・月を全て同じ半径にする。距離は「表面間のギャップ」から逆算することで
+// (中心間距離 = 半径×2 + ギャップ)、ギャップ>0である限り構造的に重なりようがない。
+// 距離の比率(太陽〜地球 / 地球〜月)は、月の満ち欠け（太陽→地球方向を共用するDirectionalLightの
+// 近似）にわずかな誤差を生むが、学習用途では無視できるレベルのため「見やすさ」を優先して決める
+// （詳細はdocs/issue-007-scale-model-deform-mode.md参照）
+const DEFORM_BODY_R = 10
+const DEFORM_EARTH_MOON_GAP = 3 * DEFORM_BODY_R
+const DEFORM_SUN_EARTH_GAP = 8 * DEFORM_BODY_R
+const DEFORM_EARTH_MOON_DIST = 2 * DEFORM_BODY_R + DEFORM_EARTH_MOON_GAP
+const DEFORM_SUN_EARTH_DIST = 2 * DEFORM_BODY_R + DEFORM_SUN_EARTH_GAP
+
 // 太陽を原点（この系で唯一動かない基準点）、Y=公転面(黄道面=XZ平面)の法線。
 // 地球・月の位置は円軌道で簡略化した公転運動により、毎フレームcomputeOrbitalPositions()が
 // この2つのVector3を書き換える（他の箇所はこのオブジェクトへの参照を持ち続けるだけでよい）
@@ -34,10 +47,15 @@ type BodyKey = 'sun' | 'earth' | 'moon'
 
 // 「系全体」ボタンで使う、その天体の衛星の公転半径（issue #006）。今日の実際の衛星の位置ではなく
 // 公転半径そのものを使うことで、衛星が軌道上のどこにいても画面外に出ない、日付に依存しない距離に
-// なる。月には衛星が無いためエントリが無い（UI側でボタン自体を隠す）
-const SATELLITE_ORBIT_RADIUS: Partial<Record<BodyKey, number>> = {
+// なる。月には衛星が無いためエントリが無い（UI側でボタン自体を隠す）。デフォルメモード（issue #007）
+// では実際の距離ではなくデフォルメ後の距離を使う必要があるため、実寸/デフォルメの2セットを用意する
+const REAL_SATELLITE_ORBIT_RADIUS: Partial<Record<BodyKey, number>> = {
   sun: EARTH_SUN_DIST,
   earth: EARTH_MOON_DIST,
+}
+const DEFORM_SATELLITE_ORBIT_RADIUS: Partial<Record<BodyKey, number>> = {
+  sun: DEFORM_SUN_EARTH_DIST,
+  earth: DEFORM_EARTH_MOON_DIST,
 }
 export type SimMode = 'day' | 'month' | 'year'
 
@@ -113,12 +131,11 @@ export class ScaleModel3D {
   private targetFocusBtn = document.getElementById('scale-target-focus-btn') as HTMLButtonElement
   private targetSystemBtn = document.getElementById('scale-target-system-btn') as HTMLButtonElement
 
-  // デフォルメモード（実験的機能）: 天体モデルの見た目の大きさだけを拡大する。距離・軌道には
-  // 一切触れないため、位置に関するロジック(公転・時間再生)はこの状態を意識しなくてよい。
-  // フォーカス/全体表示のフィット計算・ラベルの当たり判定は見た目の大きさに追従させたいので、
-  // displayRadius()経由でこの倍率を加味する（ユーザー要望: 「現在の天体の倍率も含めて画面に
-  // フィットするようにしてほしい」）
-  private deformFactor: 1 | 10 = 1
+  // デフォルメモード（issue #007。実験的）: 太陽・地球・月を全て同じ半径(DEFORM_BODY_R)にし、
+  // 距離もDEFORM_EARTH_MOON_DIST/DEFORM_SUN_EARTH_DISTに置き換える単純な2状態トグル。
+  // 実寸⇔デフォルメの切替のみで、中間の倍率は持たない（過去の連続スライダー案は撤去。
+  // backup/deform-distance-scale-wipブランチ参照）
+  private deformMode = false
   private deformToggleBtn = document.getElementById('scale-deform-toggle-btn') as HTMLButtonElement
 
   // 対象の天体へのカメラ追従（issue #005）。前フレームの位置との差分だけ注視点・カメラ位置の
@@ -361,6 +378,7 @@ export class ScaleModel3D {
 
     // デフォルメモード切り替え（実験的機能）
     this.deformToggleBtn.addEventListener('click', () => this.toggleDeformMode())
+    this.updateDeformButtonUI()
 
     // 時間バー: 日/月/年切り替え・シークバー・再生/停止（issue #004）
     for (const key of ['day', 'month', 'year'] as const) {
@@ -564,16 +582,21 @@ export class ScaleModel3D {
    * 地球と太陽の間、満月=0.5で太陽の反対側)を基準にしている
    */
   private computeOrbitalPositions(date: Date): number {
+    // デフォルメモード（issue #007）中は、実際の距離ではなくDEFORM_*_DISTを使う。角度の計算式は
+    // 変えないため、月の公転角度(=満ち欠けの形)はどちらのモードでも常に正確なまま
+    const sunEarthDist = this.deformMode ? DEFORM_SUN_EARTH_DIST : EARTH_SUN_DIST
+    const earthMoonDist = this.deformMode ? DEFORM_EARTH_MOON_DIST : EARTH_MOON_DIST
+
     const earthAngle = ScaleModel3D.dayOfYearFraction(date) * Math.PI * 2
-    EARTH_POS.set(Math.cos(earthAngle) * EARTH_SUN_DIST, 0, Math.sin(earthAngle) * EARTH_SUN_DIST)
+    EARTH_POS.set(Math.cos(earthAngle) * sunEarthDist, 0, Math.sin(earthAngle) * sunEarthDist)
 
     const moonPhase = SunCalc.getMoonIllumination(date).phase // 0(新月)〜1(次の新月)
     const sunwardAngle = earthAngle + Math.PI // 地球から見て太陽がある方向
     const moonAngle = sunwardAngle + moonPhase * Math.PI * 2
     MOON_POS.set(
-      EARTH_POS.x + Math.cos(moonAngle) * EARTH_MOON_DIST,
+      EARTH_POS.x + Math.cos(moonAngle) * earthMoonDist,
       0,
-      EARTH_POS.z + Math.sin(moonAngle) * EARTH_MOON_DIST
+      EARTH_POS.z + Math.sin(moonAngle) * earthMoonDist
     )
     return earthAngle
   }
@@ -750,15 +773,15 @@ export class ScaleModel3D {
   }
 
   /**
-   * 天体の「見た目の」半径。デフォルメモード中はmesh.scaleで見た目だけ拡大されているため、
+   * 天体の「見た目の」半径。デフォルメモード中は全天体が同じDEFORM_BODY_Rになっているため、
    * フィット計算・ラベル当たり判定など「画面上どれだけの大きさに見えるか」を基準にする箇所では
    * radiusByKey（実寸半径）ではなくこちらを使う
    */
   private displayRadius(key: BodyKey): number {
-    return this.radiusByKey[key] * this.deformFactor
+    return this.deformMode ? DEFORM_BODY_R : this.radiusByKey[key]
   }
 
-  /** frameAll()・ラベル当たり判定で使う、今の見た目(デフォルメ倍率込み)の天体一覧 */
+  /** frameAll()・ラベル当たり判定で使う、今の見た目(デフォルメ込み)の天体一覧 */
   private focusableBodies(): { pos: THREE.Vector3; radius: number }[] {
     return (['sun', 'earth', 'moon'] as const).map(key => ({
       pos: this.posByKey[key], radius: this.displayRadius(key),
@@ -766,20 +789,28 @@ export class ScaleModel3D {
   }
 
   /**
-   * デフォルメモード（実験的機能）の切り替え。天体モデルの見た目の大きさだけをdeformFactor倍にする。
-   * posByKey/軌道計算には一切触れないため、距離は常に実際の比率のまま。
+   * デフォルメモード（issue #007。実験的）の切り替え。太陽・地球・月を全て同じ見た目の半径
+   * (DEFORM_BODY_R)にする。天体ごとに実際の半径が異なるため、各メッシュに掛けるscale倍率は
+   * それぞれ別の値になる（DEFORM_BODY_R / 実際の半径）。距離はcomputeOrbitalPositions()側が
+   * this.deformModeを見て別の距離定数に切り替える（本メソッドでは位置の再計算は行わないが、
+   * 毎フレームの描画ループが次フレームで自動的に反映する）。
    * 輪郭殻(outlineByKey)は本体メッシュの子オブジェクトのため、親のscaleにより見た目の拡大は
    * 自動的に追従する（updateLabels()側で輪郭線の太さだけ補正が必要。該当箇所のコメント参照）
    */
   private toggleDeformMode() {
-    this.deformFactor = this.deformFactor === 1 ? 10 : 1
+    this.deformMode = !this.deformMode
     for (const key of ['sun', 'earth', 'moon'] as const) {
-      this.meshByKey[key].scale.setScalar(this.deformFactor)
+      const scale = this.deformMode ? DEFORM_BODY_R / this.radiusByKey[key] : 1
+      this.meshByKey[key].scale.setScalar(scale)
     }
-    this.earthAxisLine.scale.setScalar(this.deformFactor)
-    this.controls.minDistance = MOON_R * this.deformFactor * 3
-    this.deformToggleBtn.textContent = this.deformFactor === 1 ? '×1' : '×10'
-    this.deformToggleBtn.classList.toggle('active', this.deformFactor !== 1)
+    this.earthAxisLine.scale.setScalar(this.deformMode ? DEFORM_BODY_R / EARTH_R : 1)
+    this.controls.minDistance = (this.deformMode ? DEFORM_BODY_R : MOON_R) * 3
+    this.updateDeformButtonUI()
+  }
+
+  private updateDeformButtonUI() {
+    this.deformToggleBtn.textContent = t(this.deformMode ? 'scale-deform-deform' : 'scale-deform-real')
+    this.deformToggleBtn.classList.toggle('active', this.deformMode)
   }
 
   /**
@@ -791,15 +822,17 @@ export class ScaleModel3D {
    * 衛星を持たない天体(月)はUI側でボタン自体を隠す
    */
   private focusOnSystemView() {
-    const orbitRadius = SATELLITE_ORBIT_RADIUS[this.targetBody]
+    const orbitRadii = this.deformMode ? DEFORM_SATELLITE_ORBIT_RADIUS : REAL_SATELLITE_ORBIT_RADIUS
+    const orbitRadius = orbitRadii[this.targetBody]
     if (orbitRadius === undefined) return
     const distance = Math.max(this.frameDistanceForOrbit(orbitRadius, 1.15), this.controls.minDistance)
     this.moveCameraTo(this.posByKey[this.targetBody], distance)
   }
 
-  /** 「系全体」ボタンの表示/非表示を対象の天体に応じて切り替える（衛星を持たない月では隠す） */
+  /** 「系全体」ボタンの表示/非表示を対象の天体に応じて切り替える（衛星を持たない月では隠す）。
+   *  どのキーが定義されているかは実寸/デフォルメで変わらないため、どちらを見ても同じ結果になる */
   private updateTargetButtonsUI() {
-    this.targetSystemBtn.hidden = SATELLITE_ORBIT_RADIUS[this.targetBody] === undefined
+    this.targetSystemBtn.hidden = REAL_SATELLITE_ORBIT_RADIUS[this.targetBody] === undefined
   }
 
   /**
@@ -1102,11 +1135,12 @@ export class ScaleModel3D {
       outline.visible = s.key === this.targetBody
       if (outline.visible) {
         // 殻は本体メッシュの子オブジェクトなので、このscaleは親のローカル空間(=実寸半径)基準。
-        // デフォルメモード中は親のmesh.scaleが既にdeformFactor倍されているため、ここは常に
-        // 実寸半径(radiusByKey)を使い、はみ出し量の項だけdeformFactorで割って打ち消しておく
-        // （そうしないと輪郭の太さ自体がdeformFactor倍に見えてしまう）
+        // デフォルメモード中は親のmesh.scaleが既にDEFORM_BODY_R/実寸半径倍されているため、ここは
+        // 常に実寸半径(radiusByKey)を使い、はみ出し量の項だけ親の拡大率で割って打ち消しておく
+        // （そうしないと輪郭の太さ自体が親と一緒に拡大されて見えてしまう）
         const bodyRadius = this.radiusByKey[s.key]
-        const desiredRadius = bodyRadius + (s.depth * pxToTan(ScaleModel3D.OUTLINE_THICKNESS_PX)) / this.deformFactor
+        const parentScale = this.deformMode ? DEFORM_BODY_R / bodyRadius : 1
+        const desiredRadius = bodyRadius + (s.depth * pxToTan(ScaleModel3D.OUTLINE_THICKNESS_PX)) / parentScale
         outline.scale.setScalar(desiredRadius / bodyRadius)
       }
 
