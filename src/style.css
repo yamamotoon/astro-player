@@ -389,6 +389,25 @@ main[data-fs="view2d"]:fullscreen .info-panel {
   white-space: pre;
 }
 
+/* 現在シミュレーションしている日時。画面上部中央に常時、大きめに表示する
+   （下部シークバー横の小さいラベルだけでは「今どの時点の天体か」が分かりにくいため） */
+.scale-date-hud {
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 5px 14px;
+  background: rgba(0, 0, 20, 0.55);
+  color: #d8e8ff;
+  font-family: 'Consolas', 'SFMono-Regular', monospace;
+  font-size: 0.9rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  border-radius: 6px;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
 /* カメラの向きインジケーター: 固定サイズ・固定位置。メインのズームには一切連動しない */
 .scale-angle-gizmo {
   position: absolute;

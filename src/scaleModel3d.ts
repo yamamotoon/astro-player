@@ -116,6 +116,9 @@ export class ScaleModel3D {
   private playbackDateLabel = document.getElementById('scale-sim-date-label') as HTMLElement
   private static readonly SEEKBAR_MAX = 1000
 
+  // 画面上部中央に常時表示する、現在シミュレーションしている日時（シークバー横の小さいラベルとは別）
+  private dateHudEl = document.getElementById('scale-date-hud') as HTMLElement
+
   // カメラの向きインジケーター: メインの3Dワールドとは独立した固定サイズのミニビューポートに
   // 座標軸モデルを描画し、メインカメラの「向き」だけを毎フレーム同期する（位置・ズームは無視）
   private gizmoScene: THREE.Scene
@@ -720,6 +723,13 @@ export class ScaleModel3D {
     return dateStr
   }
 
+  /** 画面上部の常時表示HUD用: 「今どの時点の天体を見ているか」を明確にするため、モードに関わらず
+   *  常に時刻まで表示する（formatSimDate()は下部シークバー横の小さいラベル用で役割が異なる） */
+  private static formatSimDateFull(date: Date): string {
+    const pad = (n: number) => String(n).padStart(2, '0')
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`
+  }
+
   /** 時間バー(モードボタンの見た目・シークバーの位置・再生ボタンのアイコン・日時ラベル)を毎フレーム同期する */
   private updatePlaybackUI() {
     for (const key of ['day', 'month', 'year'] as const) {
@@ -730,7 +740,9 @@ export class ScaleModel3D {
     // playback.seekFraction()へ即時反映済みなので、ここでの同期は既存の値をなぞるだけで
     // 競合しない。再生中の進行だけでなく、モード切り替え直後のリセット(→0)もこれで反映される
     this.playbackSeekbar.value = String(Math.round(this.playback.fraction * ScaleModel3D.SEEKBAR_MAX))
-    this.playbackDateLabel.textContent = ScaleModel3D.formatSimDate(this.currentSimDate(), this.simMode)
+    const simDate = this.currentSimDate()
+    this.playbackDateLabel.textContent = ScaleModel3D.formatSimDate(simDate, this.simMode)
+    this.dateHudEl.textContent = ScaleModel3D.formatSimDateFull(simDate)
   }
 
   // ラベルの当たり判定は常に画面上一定サイズの箱として扱う（本体をタップするより少し広めに取り、
