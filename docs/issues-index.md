@@ -11,6 +11,7 @@
 | [004](issue-004-scale-model-time-sync.md) | スケールモデルを時間と連動させる（自転・公転・シークバー） | Phase 1〜3実装・検証・確認済み。クローズ |
 | [005](issue-005-camera-target-tracking.md) | 天体が動くようになったことで、カメラの注視点が追従しない問題 | 実装・検証済み（issue #006で一部置き換え） |
 | [006](issue-006-single-target-distance-presets.md) | 注視点を天体1つに単純化し、距離をプリセット化する | 実装・検証済み |
+| [007](issue-007-scale-model-deform-mode.md) | スケールモデルのデフォルメ表示モード | 課題を起票。設計検討中 |
 
 `scale-model-3d-handover.md`は個別issueではなく、スケールモデル機能全体の生きた状態サマリなので
 番号を振らない。
