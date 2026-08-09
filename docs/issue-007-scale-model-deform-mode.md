@@ -2,7 +2,7 @@
 
 ## 状態
 
-**方針に合意。実装前（過去の試行錯誤は`backup/deform-distance-scale-wip`ブランチに退避済み）**
+**実装済み。ブラウザでの動作確認待ち（過去の試行錯誤は`backup/deform-distance-scale-wip`ブランチに退避済み）**
 
 ## 背景・課題
 
