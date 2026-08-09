@@ -43,6 +43,12 @@ const EARTH_AXIAL_TILT_DEG = 23.44
 const EARTH_AXIS = new THREE.Vector3(0, 1, 0)
   .applyAxisAngle(new THREE.Vector3(0, 0, 1), THREE.MathUtils.degToRad(EARTH_AXIAL_TILT_DEG))
 
+// 月の軌道面: 実際は地球の公転面(黄道面)に対して約5.14度傾いている。実際の昇交点は約18.6年周期で
+// 歳差運動するが、簡略化のため固定軸(X軸)まわりの傾きとして扱う（このアプリの円軌道簡略化と同じ方針）
+const MOON_ORBIT_INCLINATION_DEG = 5.14
+const MOON_ORBIT_TILT_QUAT = new THREE.Quaternion()
+  .setFromAxisAngle(new THREE.Vector3(1, 0, 0), THREE.MathUtils.degToRad(MOON_ORBIT_INCLINATION_DEG))
+
 type BodyKey = 'sun' | 'earth' | 'moon'
 
 // 「系全体」ボタンで使う、その天体の衛星の公転半径（issue #006）。今日の実際の衛星の位置ではなく
@@ -85,6 +91,11 @@ export class ScaleModel3D {
   private sunLeader: THREE.Line
   private earthLeader: THREE.Line
   private moonLeader: THREE.Line
+
+  // 衛星の公転ルート（軌道円）: 半径1の円ジオメトリを毎フレームscaleで実際の軌道半径に広げる。
+  // earthOrbitLineは太陽(原点)中心で固定、moonOrbitLineは地球の位置を追って毎フレーム再配置する
+  private earthOrbitLine!: THREE.LineLoop
+  private moonOrbitLine!: THREE.LineLoop
 
   // デバッグ用: 当たり判定・引き出し線の距離計算に実際に使っている「ラベルのサイズ」
   // (textHalfWs/textHalfHs、ctx.measureText()の実測値)を枠線で可視化する。
@@ -255,6 +266,14 @@ export class ScaleModel3D {
     }))
     this.earthAxisLine.position.copy(EARTH_POS)
     this.scene.add(this.earthAxisLine)
+
+    // 衛星の公転ルート（軌道円）。半径1のXZ平面上の円を作り、毎フレーム実際の軌道半径にscaleする
+    // （syncSceneToOrbitalState()参照）。主役の天体を邪魔しないよう控えめな半透明の線にしている
+    this.earthOrbitLine = this.makeOrbitLine(0x6a86b8)
+    this.moonOrbitLine = this.makeOrbitLine(0x9098a8)
+    // 月の軌道面の傾き(MOON_ORBIT_TILT_QUAT)は固定なので、姿勢はここで一度だけ設定すればよい
+    this.moonOrbitLine.quaternion.copy(MOON_ORBIT_TILT_QUAT)
+    this.scene.add(this.earthOrbitLine, this.moonOrbitLine)
 
     this.moonMesh = new THREE.Mesh(
       new THREE.SphereGeometry(MOON_R, 16, 12),
@@ -593,11 +612,11 @@ export class ScaleModel3D {
     const moonPhase = SunCalc.getMoonIllumination(date).phase // 0(新月)〜1(次の新月)
     const sunwardAngle = earthAngle + Math.PI // 地球から見て太陽がある方向
     const moonAngle = sunwardAngle + moonPhase * Math.PI * 2
-    MOON_POS.set(
-      EARTH_POS.x + Math.cos(moonAngle) * earthMoonDist,
-      0,
-      EARTH_POS.z + Math.sin(moonAngle) * earthMoonDist
-    )
+    // 地球から見た月の方向(moonAngle)は地球の公転面(XZ平面)を基準に定義したうえで、
+    // その平面自体をMOON_ORBIT_TILT_QUATで傾けることで、月の軌道面の傾きを再現する
+    const moonOffset = new THREE.Vector3(Math.cos(moonAngle) * earthMoonDist, 0, Math.sin(moonAngle) * earthMoonDist)
+      .applyQuaternion(MOON_ORBIT_TILT_QUAT)
+    MOON_POS.set(EARTH_POS.x + moonOffset.x, moonOffset.y, EARTH_POS.z + moonOffset.z)
     return earthAngle
   }
 
@@ -634,6 +653,12 @@ export class ScaleModel3D {
     this.moonMesh.position.copy(MOON_POS)
     this.earthAxisLine.position.copy(EARTH_POS)
     this.sunLightTarget.position.copy(EARTH_POS)
+
+    // 衛星の公転ルート。earthOrbitLineは太陽(原点)中心で固定なので位置は変えず半径だけ更新する。
+    // moonOrbitLineは地球を追って毎フレーム再配置する（地球自身が公転で動くため）
+    this.earthOrbitLine.scale.setScalar(this.deformMode ? DEFORM_SUN_EARTH_DIST : EARTH_SUN_DIST)
+    this.moonOrbitLine.position.copy(EARTH_POS)
+    this.moonOrbitLine.scale.setScalar(this.deformMode ? DEFORM_EARTH_MOON_DIST : EARTH_MOON_DIST)
 
     // 自転角度は「フレームごとの差分回転」ではなく、経過時間から絶対角度を求めて毎フレーム
     // 姿勢を再計算する（差分の累積だとシークバーで巻き戻した時に正しい向きに戻せないため）。
@@ -872,6 +897,24 @@ export class ScaleModel3D {
     hull.visible = false
     bodyMesh.add(hull)
     return hull
+  }
+
+  private static readonly ORBIT_LINE_SEGMENTS = 128
+
+  /**
+   * 半径1・XZ平面上の円（衛星の公転ルート表示用）。実際の軌道半径はobject.scaleで毎フレーム
+   * 反映する（syncSceneToOrbitalState()参照）ため、ここでは単位円を1つ作るだけでよい
+   */
+  private makeOrbitLine(color: number): THREE.LineLoop {
+    const points: THREE.Vector3[] = []
+    for (let i = 0; i < ScaleModel3D.ORBIT_LINE_SEGMENTS; i++) {
+      const theta = (i / ScaleModel3D.ORBIT_LINE_SEGMENTS) * Math.PI * 2
+      points.push(new THREE.Vector3(Math.cos(theta), 0, Math.sin(theta)))
+    }
+    const geometry = new THREE.BufferGeometry().setFromPoints(points)
+    return new THREE.LineLoop(geometry, new THREE.LineBasicMaterial({
+      color, transparent: true, opacity: 0.35,
+    }))
   }
 
   /**
