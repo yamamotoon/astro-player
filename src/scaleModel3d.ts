@@ -3,6 +3,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import SunCalc from 'suncalc'
 import { t } from './i18n'
 import earthTextureUrl from './assets/earth-texture.png'
+import moonTextureUrl from './assets/moon-texture.png'
 import { PlaybackController } from './playbackController'
 
 // ---- 実際の物理値(km)。月半径=1になるよう、常にこれらから比率を算出する ----
@@ -280,7 +281,7 @@ export class ScaleModel3D {
 
     this.moonMesh = new THREE.Mesh(
       new THREE.SphereGeometry(MOON_R, 16, 12),
-      new THREE.MeshLambertMaterial({ color: 0xccccdd })
+      new THREE.MeshLambertMaterial({ map: new THREE.TextureLoader().load(moonTextureUrl) })
     )
     this.moonMesh.position.copy(MOON_POS)
     this.moonMesh.userData.radius = MOON_R

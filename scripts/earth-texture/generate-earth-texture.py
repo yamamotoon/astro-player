@@ -10,8 +10,8 @@ src/assets/earth-texture.png を実写画像で直接置き換えるだけでよ
 （scaleModel3d.ts 側はファイルをimportしているだけなのでコード変更は不要）。
 
 実行方法:
-  python scripts/generate-earth-texture.py [データJSON] [出力PNG]
-  例: python scripts/generate-earth-texture.py earth-continents-50m.json ../src/assets/earth-texture-50m.png
+  python scripts/earth-texture/generate-earth-texture.py [データJSON] [出力PNG]
+  例: python scripts/earth-texture/generate-earth-texture.py earth-continents-50m.json ../../src/assets/earth-texture-50m.png
   引数省略時は earth-continents.json -> src/assets/earth-texture.png (110m版)
 """
 import json
@@ -21,7 +21,7 @@ from PIL import Image, ImageDraw
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_PATH = os.path.join(SCRIPT_DIR, sys.argv[1] if len(sys.argv) > 1 else 'earth-continents.json')
-OUT_PATH = os.path.join(SCRIPT_DIR, sys.argv[2] if len(sys.argv) > 2 else os.path.join('..', 'src', 'assets', 'earth-texture.png'))
+OUT_PATH = os.path.join(SCRIPT_DIR, sys.argv[2] if len(sys.argv) > 2 else os.path.join('..', '..', 'src', 'assets', 'earth-texture.png'))
 
 WIDTH, HEIGHT = 1024, 512
 OCEAN_COLOR = (0x2f, 0x6f, 0xb0)
