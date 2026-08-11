@@ -855,6 +855,11 @@ export class ScaleModel3D {
     this.earthAxisLine.scale.setScalar(this.deformMode ? DEFORM_BODY_R / EARTH_R : 1)
     this.controls.minDistance = (this.deformMode ? DEFORM_BODY_R : MOON_R) * 3
     this.updateDeformButtonUI()
+
+    // 実寸⇔デフォルメで距離のスケールが大きく変わる（例: 地球〜月間は実寸221.3→デフォルメ50）ため、
+    // カメラを動かさないままだと収まり方がおかしくなる。「系全体」ボタンと同じ計算
+    // (focusOnSystemView())で対象の系がちょうど収まる距離に再フィットする
+    this.focusOnSystemView()
   }
 
   private updateDeformButtonUI() {
