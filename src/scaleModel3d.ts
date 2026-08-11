@@ -50,6 +50,10 @@ const MOON_ORBIT_INCLINATION_DEG = 5.14
 const MOON_ORBIT_TILT_QUAT = new THREE.Quaternion()
   .setFromAxisAngle(new THREE.Vector3(1, 0, 0), THREE.MathUtils.degToRad(MOON_ORBIT_INCLINATION_DEG))
 
+// 月の自転軸。実際の自転軸は公転面に対して約1.5度しか傾いていないため、EARTH_AXISと違い
+// 傾きは無視してY軸のまま扱う（潮汐固定の見た目には影響しない誤差）
+const MOON_SPIN_AXIS = new THREE.Vector3(0, 1, 0)
+
 type BodyKey = 'sun' | 'earth' | 'moon'
 
 // 「系全体」ボタンで使う、その天体の衛星の公転半径（issue #006）。今日の実際の衛星の位置ではなく
@@ -663,6 +667,13 @@ export class ScaleModel3D {
     this.earthOrbitLine.scale.setScalar(this.deformMode ? DEFORM_SUN_EARTH_DIST : EARTH_SUN_DIST)
     this.moonOrbitLine.position.copy(EARTH_POS)
     this.moonOrbitLine.scale.setScalar(this.deformMode ? DEFORM_EARTH_MOON_DIST : EARTH_MOON_DIST)
+
+    // 月は自転周期=公転周期(潮汐固定)で、常に同じ面(テクスチャの経度0=実写で地球側だった面)を
+    // 地球へ向け続ける。自転速度を時間から積分するのではなく、地球への方向ベクトルから毎フレーム
+    // 直接姿勢を求める（位置さえ正しければ自転も自動的に正しくなり、シークバーの巻き戻しにも強い）
+    const moonToEarth = new THREE.Vector3().subVectors(EARTH_POS, MOON_POS)
+    const moonSpinAngle = Math.atan2(-moonToEarth.z, moonToEarth.x)
+    this.moonMesh.quaternion.setFromAxisAngle(MOON_SPIN_AXIS, moonSpinAngle)
 
     // 自転角度は「フレームごとの差分回転」ではなく、経過時間から絶対角度を求めて毎フレーム
     // 姿勢を再計算する（差分の累積だとシークバーで巻き戻した時に正しい向きに戻せないため）。
