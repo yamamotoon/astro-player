@@ -564,6 +564,53 @@ main[data-fs="view2d"]:fullscreen .info-panel {
   padding: 0 2px;
 }
 
+/* ---- ステップ再生 A/B比較用（一時的。docs/issue-009参照、判断がついたら片方を削除する） ---- */
+#scale-playback {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+}
+
+.scale-playback-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.scale-playback-row:last-of-type {
+  justify-content: center;
+}
+
+.scale-step-group {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+/* display:flexの指定がUA標準の[hidden]{display:none}をカスケードで上書きしてしまい、
+   hidden属性だけではA/B切り替えが効かなくなるため明示的に上書きする */
+.scale-step-group[hidden] {
+  display: none;
+}
+
+.step-btn {
+  background: transparent;
+  border: 1px solid #2a2a4a;
+  color: #7080a0;
+  font-size: 0.66rem;
+  padding: 5px 9px;
+  border-radius: 6px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.step-btn:hover {
+  border-color: #3a5a9e;
+  color: #a0c0ff;
+}
+
 /* AR パネル */
 .ar-panel {
   flex: 1;
@@ -702,6 +749,17 @@ main[data-fs="view2d"]:fullscreen .info-panel {
   .scale-mode-btn {
     padding: 6px 10px;
     font-size: 0.78rem;
+  }
+
+  /* ステップ再生ボタン（A/B比較用・一時的）: 横幅が厳しいので詰める。
+     案Bは矢印の数(◀/◀◀/◀◀◀)で刻み幅を表すため文字より場所を取らない */
+  .step-btn {
+    padding: 6px 8px;
+    font-size: 0.72rem;
+  }
+
+  .scale-step-group {
+    gap: 3px;
   }
 
   /* views: 縦スクロール */
