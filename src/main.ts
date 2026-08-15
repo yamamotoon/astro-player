@@ -4,7 +4,7 @@ import { Scene3D } from './scene3d'
 import { Compass2D } from './compass2d'
 import { getAstroData, formatTime } from './astroCalc'
 import { ARView } from './ar'
-import { ScaleModel3D } from './scaleModel3d'
+import { ScaleModel3D, type ScaleModelConfig } from './scaleModel3d'
 import { PlaybackController } from './playbackController'
 
 type SceneName = 'menu' | 'dashboard' | 'sky' | 'scale'
@@ -38,11 +38,43 @@ zoomSlider.addEventListener('input', () => {
   arView.setFov(parseFloat(zoomSlider.value))
 })
 
+// ---- スケール系モード（既存の「スケール」/ 地球の公転ビューア / 地球の自転ビューア） ----
+// 3つとも同じcanvas・同じDOM（#scene-scale, #scale-playback）を使い回す独立モード。
+// 常に生きたインスタンスが1つだけになるようにする（=IDの衝突や多重描画が構造的に起きない）ため、
+// モードに入る/離れるたびに必ずdispose()してから作り直す（issue #008）
 const canvasScale = document.getElementById('canvas-scale') as HTMLCanvasElement
-const scaleModel = new ScaleModel3D(canvasScale)
+let scaleModel: ScaleModel3D | null = null
+
+const SCALE_CONFIG_FULL: ScaleModelConfig = {
+  availableModes: ['day', 'month', 'year'], defaultMode: 'day', deformDefault: false, defaultTarget: 'sun',
+}
+const SCALE_CONFIG_ORBIT: ScaleModelConfig = {
+  // 地球の公転ビューア: 地球の公転・月の動き（満ち欠け）が主役。日モードは出さない。
+  // 注視点は太陽（原点で動かない）。地球を注視点にすると毎フレーム地球へ追従してしまい、
+  // 逆に太陽側が地球の周りを回っているように見えてしまうため
+  availableModes: ['month', 'year'], defaultMode: 'month', deformDefault: true, defaultTarget: 'sun',
+}
+const SCALE_CONFIG_SPIN: ScaleModelConfig = {
+  // 地球の自転ビューア: 地球の自転(昼夜)・月の潮汐固定が主役。年モードは出さない
+  availableModes: ['day', 'month'], defaultMode: 'day', deformDefault: true, defaultTarget: 'earth',
+}
+
+// 画面タイトル(#scale-scene-title)は3つの入口で共有しているDOMなので、入る時に文言を出し分ける。
+// data-i18n属性は付けない（つけるとapplyLang()の一括スイープで固定文言に戻されてしまうため）。
+// 言語切替時にも今のモードの文言で出し直せるよう、キー自体も覚えておく
+const scaleSceneTitle = document.getElementById('scale-scene-title') as HTMLElement
+let scaleSceneTitleKey = 'view-scale'
+
+function enterScaleMode(config: ScaleModelConfig, titleKey: string) {
+  scaleModel?.dispose()
+  scaleModel = new ScaleModel3D(canvasScale, config)
+  scaleSceneTitle.textContent = t(titleKey)
+  scaleSceneTitleKey = titleKey
+  showScene('scale')
+}
 
 const scaleFitBtn = document.getElementById('scale-fit-btn') as HTMLButtonElement
-scaleFitBtn.addEventListener('click', () => scaleModel.frameAll())
+scaleFitBtn.addEventListener('click', () => scaleModel?.frameAll())
 
 function getSettings() {
   const lat = parseFloat(latInput.value) || 35.6762
@@ -70,8 +102,17 @@ const backToMenuBtn = document.getElementById('back-to-menu-btn') as HTMLButtonE
 const menuDashboardBtn = document.getElementById('menu-dashboard-btn') as HTMLButtonElement
 const menuSkyBtn = document.getElementById('menu-sky-btn') as HTMLButtonElement
 const menuScaleBtn = document.getElementById('menu-scale-btn') as HTMLButtonElement
+const menuScaleOrbitBtn = document.getElementById('menu-scale-orbit-btn') as HTMLButtonElement
+const menuScaleSpinBtn = document.getElementById('menu-scale-spin-btn') as HTMLButtonElement
 
 function showScene(name: SceneName) {
+  // スケール系モードは「今画面に出ている時だけ生きている」設計（issue #008）。
+  // scale以外へ出ていく瞬間に必ず破棄し、非表示中に描画し続けないようにする
+  if (name !== 'scale' && scaleModel) {
+    scaleModel.dispose()
+    scaleModel = null
+  }
+
   const showHud = name === 'dashboard' || name === 'sky'
   sceneMenu.style.display = name === 'menu' ? '' : 'none'
   sceneHud.style.display = showHud ? '' : 'none'
@@ -89,7 +130,7 @@ function showScene(name: SceneName) {
     requestAnimationFrame(() => scene3d.handleResize())
   }
   if (name === 'scale') {
-    requestAnimationFrame(() => scaleModel.handleResize())
+    requestAnimationFrame(() => scaleModel?.handleResize())
   }
 }
 
@@ -100,7 +141,9 @@ menuSkyBtn.addEventListener('click', () => {
   showScene('sky')
   arView.start(arCanvas)
 })
-menuScaleBtn.addEventListener('click', () => showScene('scale'))
+menuScaleBtn.addEventListener('click', () => enterScaleMode(SCALE_CONFIG_FULL, 'view-scale'))
+menuScaleOrbitBtn.addEventListener('click', () => enterScaleMode(SCALE_CONFIG_ORBIT, 'view-scale-orbit'))
+menuScaleSpinBtn.addEventListener('click', () => enterScaleMode(SCALE_CONFIG_SPIN, 'view-scale-spin'))
 backToMenuBtn.addEventListener('click', () => showScene('menu'))
 
 // ---- 24時間シミュレーション（状態変数・DOM参照）----
@@ -254,7 +297,8 @@ langBtn.addEventListener('click', () => {
   langBtn.textContent = next === 'ja' ? 'EN' : 'JP'
   scene3d.refreshTextLabels()
   arView.refreshDirLabels()
-  scaleModel.refreshTextLabels()
+  scaleModel?.refreshTextLabels()
+  scaleSceneTitle.textContent = t(scaleSceneTitleKey) // data-i18n化していないので手動で出し直す
 })
 
 // ---- 24時間シミュレーション ----

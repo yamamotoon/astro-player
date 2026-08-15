@@ -37,6 +37,16 @@
         <span class="menu-card-title" data-i18n="nav-scale">スケール</span>
         <span class="menu-card-desc" data-i18n="menu-scale-desc">地球・月・太陽の距離と大きさを正確に再現</span>
       </button>
+      <button id="menu-scale-orbit-btn" class="menu-card">
+        <span class="menu-card-icon">☀️</span>
+        <span class="menu-card-title" data-i18n="nav-scale-orbit">地球の公転</span>
+        <span class="menu-card-desc" data-i18n="menu-scale-orbit-desc">太陽の周りを回る地球と、月の動き・満ち欠けを見る</span>
+      </button>
+      <button id="menu-scale-spin-btn" class="menu-card">
+        <span class="menu-card-icon">🌓</span>
+        <span class="menu-card-title" data-i18n="nav-scale-spin">地球の自転</span>
+        <span class="menu-card-desc" data-i18n="menu-scale-spin-desc">地球の自転（昼と夜）と、月がいつも同じ面を向けている様子を見る</span>
+      </button>
     </section>
 
     <!-- 共有の設定パネル: メニュー以外の全シーンで表示 -->
@@ -131,7 +141,7 @@
     <!-- スケールモデル シーン（独立画面。設定パネル・シークバーは使わない） -->
     <section id="scene-scale" class="scale-view" style="display: none">
       <div class="view-title">
-        <span data-i18n="view-scale">スケールモデル（距離・大きさを正確に再現）</span>
+        <span id="scale-scene-title">スケールモデル（距離・大きさを正確に再現）</span>
         <div class="view-title-actions">
           <button id="scale-target-focus-btn" class="fullscreen-btn" title="対象にフォーカス (Enter/F)" data-i18n-title="scale-target-focus-title">🔍</button>
           <button id="scale-target-system-btn" class="fullscreen-btn" title="対象の系全体を表示" data-i18n-title="scale-target-system-title">🌐</button>

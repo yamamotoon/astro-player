@@ -70,6 +70,20 @@ const DEFORM_SATELLITE_ORBIT_RADIUS: Partial<Record<BodyKey, number>> = {
 }
 export type SimMode = 'day' | 'month' | 'year'
 
+// 各モード（既存の「スケール」／地球の公転ビューア／地球の自転ビューア）は独立させ、
+// 同時に複数インスタンスを存在させない前提にする（呼び出し側がモード切替のたびに
+// dispose()→newで作り直す）。だからこそ画面ごとの違いは、この設定オブジェクトだけで表現できる
+export interface ScaleModelConfig {
+  /** 時間バーに表示するモードボタン（この順でUIに並ぶ） */
+  availableModes: SimMode[]
+  /** 起動直後に選択されているモード。availableModesに含まれている必要がある */
+  defaultMode: SimMode
+  /** デフォルメ表示（issue #007）で起動するか */
+  deformDefault: boolean
+  /** カメラが最初にフォーカスする対象天体 */
+  defaultTarget: BodyKey
+}
+
 export class ScaleModel3D {
   private renderer: THREE.WebGLRenderer
   private scene: THREE.Scene
@@ -161,6 +175,17 @@ export class ScaleModel3D {
   private readonly onPointerUp: (e: PointerEvent) => void
   private readonly onPointerCancel: (e: PointerEvent) => void
 
+  // dispose()で確実に後始末するための汎用リスナー登録ヘルパー。addEventListenerした分だけ
+  // removeEventListenerする関数を積んでおき、dispose()で全部呼ぶ（個別にフィールドを持たなくて済む）
+  private cleanupFns: Array<() => void> = []
+  private on(target: EventTarget, type: string, handler: EventListenerOrEventListenerObject): void {
+    target.addEventListener(type, handler)
+    this.cleanupFns.push(() => target.removeEventListener(type, handler))
+  }
+
+  // このインスタンスで表示するモード（ScaleModelConfig.availableModes）。時間バーのボタン表示に使う
+  private availableModes: SimMode[] = ['day', 'month', 'year']
+
   // タップ/クリック判定用（ブラウザのclickイベントはドラッグ後のmouseupでも発火してしまうため、
   // pointerdown/pointerup間の移動量を自前で見て「実質動いていない時だけタップ扱い」にする）。
   // pointerIdで指を区別する: 2本目の指が触れた時点でタップ候補を無効化することで、
@@ -218,7 +243,15 @@ export class ScaleModel3D {
   // 日/月/年どのモードも、既存の24hシミュレーションと同じ体感速度（1周期を24秒で再生）に揃える
   private static readonly SIM_REAL_DURATION_MS = 24_000
 
-  constructor(canvas: HTMLCanvasElement) {
+  constructor(canvas: HTMLCanvasElement, config: ScaleModelConfig) {
+    // configをフィールドへ反映するのは、下のcomputeOrbitalPositions()（deformModeを見る）や
+    // 時間バーの初期化より前でなければならない
+    this.availableModes = config.availableModes
+    this.deformMode = config.deformDefault
+    this.simMode = config.defaultMode
+    this.targetBody = config.defaultTarget
+    this.playback.setPeriod(ScaleModel3D.SIM_PERIOD_MS[config.defaultMode])
+
     // カメラの初期位置がEARTH_POSを参照するため、メッシュ等を作る前に一度、実際の現在時刻
     // (simAnchorDate、フィールド初期化子で既に設定済み)に基づく公転位置を計算しておく
     this.computeOrbitalPositions(this.currentSimDate())
@@ -350,6 +383,9 @@ export class ScaleModel3D {
     this.meshByKey = { sun: this.sunMesh, earth: this.earthMesh, moon: this.moonMesh }
     this.posByKey = { sun: SUN_POS, earth: EARTH_POS, moon: MOON_POS }
     this.radiusByKey = { sun: SUN_R, earth: EARTH_R, moon: MOON_R }
+    // config.deformDefault=trueで起動した場合、ここでメッシュのscale・カメラの最小ズーム距離を
+    // 最初から合わせておく（toggleDeformMode()参照。実寸起動時はscale=1になるだけで無害）
+    this.applyDeformVisuals()
     this.outlineByKey = {
       sun: this.makeOutlineHull(this.sunMesh),
       earth: this.makeOutlineHull(this.earthMesh),
@@ -425,35 +461,38 @@ export class ScaleModel3D {
 
     // 「フォーカス」「系全体」ボタン（issue #006）。対象の天体は変えず、カメラの距離だけを
     // プリセットの距離にジャンプさせる。そこから先の手動ズーム・回転は制限しない
-    this.targetFocusBtn.addEventListener('click', () => this.focusOnTarget())
-    this.targetSystemBtn.addEventListener('click', () => this.focusOnSystemView())
+    this.on(this.targetFocusBtn, 'click', () => this.focusOnTarget())
+    this.on(this.targetSystemBtn, 'click', () => this.focusOnSystemView())
 
     // デフォルメモード切り替え（実験的機能）
-    this.deformToggleBtn.addEventListener('click', () => this.toggleDeformMode())
+    this.on(this.deformToggleBtn, 'click', () => this.toggleDeformMode())
     this.updateDeformButtonUI()
 
-    // 時間バー: 日/月/年切り替え・シークバー・再生/停止（issue #004）
+    // 時間バー: 日/月/年切り替え・シークバー・再生/停止（issue #004）。availableModesに
+    // 含まれないモードのボタンはこのインスタンスでは隠す（例: 地球の公転ビューアには「日」を出さない）
     for (const key of ['day', 'month', 'year'] as const) {
-      this.modeButtons[key].addEventListener('click', () => this.setSimMode(key))
+      const btn = this.modeButtons[key]
+      btn.hidden = !this.availableModes.includes(key)
+      this.on(btn, 'click', () => this.setSimMode(key))
     }
-    this.playbackPlayBtn.addEventListener('click', () => this.togglePlayback())
-    this.playbackSeekbar.addEventListener('input', () => {
+    this.on(this.playbackPlayBtn, 'click', () => this.togglePlayback())
+    this.on(this.playbackSeekbar, 'input', () => {
       // 手動でシークバーを動かしたら再生を止める（既存の24hシミュレーションと同じ挙動）
       this.playback.pause()
       this.playback.seekFraction(parseInt(this.playbackSeekbar.value, 10) / ScaleModel3D.SEEKBAR_MAX)
     })
 
     // ステップ再生 A/B比較用（一時的）
-    this.stepAbToggleBtn.addEventListener('click', () => {
+    this.on(this.stepAbToggleBtn, 'click', () => {
       this.stepUiVariant = this.stepUiVariant === 'A' ? 'B' : 'A'
       this.updateStepUiVariant()
     })
-    this.stepABackBtn.addEventListener('click', () => this.stepBy(-ScaleModel3D.STEP_A_DELTA_MS[this.simMode]))
-    this.stepAFwdBtn.addEventListener('click', () => this.stepBy(ScaleModel3D.STEP_A_DELTA_MS[this.simMode]))
+    this.on(this.stepABackBtn, 'click', () => this.stepBy(-ScaleModel3D.STEP_A_DELTA_MS[this.simMode]))
+    this.on(this.stepAFwdBtn, 'click', () => this.stepBy(ScaleModel3D.STEP_A_DELTA_MS[this.simMode]))
     for (const btn of document.querySelectorAll<HTMLButtonElement>('#scale-step-back-b .step-btn, #scale-step-fwd-b .step-btn')) {
       const unit = btn.dataset.unit as 'hour' | 'day' | 'month'
       const dir = Number(btn.dataset.dir)
-      btn.addEventListener('click', () => this.stepBy(ScaleModel3D.STEP_B_DELTA_MS[unit] * dir))
+      this.on(btn, 'click', () => this.stepBy(ScaleModel3D.STEP_B_DELTA_MS[unit] * dir))
     }
     this.updateStepUiVariant()
     this.updateStepALabels()
@@ -462,12 +501,12 @@ export class ScaleModel3D {
 
     this.handleResize()
 
-    // 起動時: targetBodyの初期値(太陽)の「系全体」（地球が軌道上のどこにいても収まる距離）から
+    // 起動時: targetBodyの初期値の「系全体」（対象の衛星が軌道上のどこにいても収まる距離）から
     // スタートする。handleResize()の後に呼ぶことで、正しいアスペクト比で距離を計算できる
     this.focusOnSystemView()
     this.updateTargetButtonsUI()
 
-    window.addEventListener('resize', () => this.handleResize())
+    this.on(window, 'resize', () => this.handleResize())
     this.startLoop()
   }
 
@@ -920,18 +959,29 @@ export class ScaleModel3D {
    */
   private toggleDeformMode() {
     this.deformMode = !this.deformMode
-    for (const key of ['sun', 'earth', 'moon'] as const) {
-      const scale = this.deformMode ? DEFORM_BODY_R / this.radiusByKey[key] : 1
-      this.meshByKey[key].scale.setScalar(scale)
-    }
-    this.earthAxisLine.scale.setScalar(this.deformMode ? DEFORM_BODY_R / EARTH_R : 1)
-    this.controls.minDistance = (this.deformMode ? DEFORM_BODY_R : MOON_R) * 3
+    this.applyDeformVisuals()
     this.updateDeformButtonUI()
 
     // 実寸⇔デフォルメで距離のスケールが大きく変わる（例: 地球〜月間は実寸221.3→デフォルメ50）ため、
     // カメラを動かさないままだと収まり方がおかしくなる。「系全体」ボタンと同じ計算
     // (focusOnSystemView())で対象の系がちょうど収まる距離に再フィットする
     this.focusOnSystemView()
+  }
+
+  /**
+   * 現在のthis.deformModeに、天体メッシュのscale・地軸線のscale・カメラの最小ズーム距離を合わせる。
+   * toggleDeformMode()（実験的機能。手動切替時）と、コンストラクタ（ScaleModelConfig.deformDefault=
+   * trueで最初からデフォルメ起動する時）の両方から呼ぶ。片方だけ（toggleDeformMode内）に書いて
+   * いた際、デフォルメ起動時にメッシュが実寸サイズ(例: 太陽半径400.7)のまま位置だけデフォルメ距離
+   * (太陽〜地球=100)になり、巨大な太陽メッシュにカメラが埋まる不具合があった
+   */
+  private applyDeformVisuals() {
+    for (const key of ['sun', 'earth', 'moon'] as const) {
+      const scale = this.deformMode ? DEFORM_BODY_R / this.radiusByKey[key] : 1
+      this.meshByKey[key].scale.setScalar(scale)
+    }
+    this.earthAxisLine.scale.setScalar(this.deformMode ? DEFORM_BODY_R / EARTH_R : 1)
+    this.controls.minDistance = (this.deformMode ? DEFORM_BODY_R : MOON_R) * 3
   }
 
   private updateDeformButtonUI() {
@@ -1408,6 +1458,13 @@ export class ScaleModel3D {
     this.rafId = requestAnimationFrame(loop)
   }
 
+  /**
+   * このインスタンスが持つ全リソースを解放する。呼び出し側（main.ts）は「別のモードへ切り替える
+   * 時／画面を離れる時に必ずdispose()してから次のインスタンスを作る」運用にすることで、
+   * 常に生きたインスタンスが1つだけになるようにする（ID衝突・多重描画を構造的に起こさないため）。
+   * イベントリスナー(cleanupFns・キー/ポインタ系)とThree.jsのGPUリソース(geometry/material/
+   * texture/renderer)の両方を解放する
+   */
   dispose() {
     if (this.rafId !== null) cancelAnimationFrame(this.rafId)
     window.removeEventListener('keydown', this.onKeyDown)
@@ -1415,5 +1472,33 @@ export class ScaleModel3D {
     canvas.removeEventListener('pointerdown', this.onPointerDown)
     canvas.removeEventListener('pointerup', this.onPointerUp)
     canvas.removeEventListener('pointercancel', this.onPointerCancel)
+    for (const cleanup of this.cleanupFns) cleanup()
+    this.cleanupFns = []
+
+    ScaleModel3D.disposeObject3D(this.scene)
+    ScaleModel3D.disposeObject3D(this.gizmoScene)
+    this.controls.dispose()
+    this.renderer.dispose()
+    this.gizmoRenderer?.dispose()
+  }
+
+  /** シーングラフを辿り、Mesh/Line/LineLoop/SpriteのgeometryとmaterialとテクスチャをGPUから解放する */
+  private static disposeObject3D(root: THREE.Object3D) {
+    root.traverse(obj => {
+      if (obj instanceof THREE.Mesh || obj instanceof THREE.Line) {
+        obj.geometry.dispose()
+        const materials = Array.isArray(obj.material) ? obj.material : [obj.material]
+        for (const m of materials) ScaleModel3D.disposeMaterial(m)
+      } else if (obj instanceof THREE.Sprite) {
+        ScaleModel3D.disposeMaterial(obj.material)
+      }
+    })
+  }
+
+  private static disposeMaterial(material: THREE.Material) {
+    // map(テクスチャ)を持つマテリアル種別ぶんだけ、寿命を共有するテクスチャも一緒に解放する
+    const withMap = material as THREE.Material & { map?: THREE.Texture | null }
+    withMap.map?.dispose()
+    material.dispose()
   }
 }
