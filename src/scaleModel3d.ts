@@ -614,15 +614,19 @@ export class ScaleModel3D {
     const sunEarthDist = this.deformMode ? DEFORM_SUN_EARTH_DIST : EARTH_SUN_DIST
     const earthMoonDist = this.deformMode ? DEFORM_EARTH_MOON_DIST : EARTH_MOON_DIST
 
+    // Z成分の符号を反転させて(cosθ, -sinθ)にすることで、+Y(北)から見て反時計回り
+    // （実際の公転方向。地球の自転と同じ向き）になるようにしている。単純な(cosθ, sinθ)は
+    // +Y側から見て時計回りになってしまうため(issue-009で発覚したバグの修正)
     const earthAngle = ScaleModel3D.dayOfYearFraction(date) * Math.PI * 2
-    EARTH_POS.set(Math.cos(earthAngle) * sunEarthDist, 0, Math.sin(earthAngle) * sunEarthDist)
+    EARTH_POS.set(Math.cos(earthAngle) * sunEarthDist, 0, -Math.sin(earthAngle) * sunEarthDist)
 
     const moonPhase = SunCalc.getMoonIllumination(date).phase // 0(新月)〜1(次の新月)
     const sunwardAngle = earthAngle + Math.PI // 地球から見て太陽がある方向
     const moonAngle = sunwardAngle + moonPhase * Math.PI * 2
     // 地球から見た月の方向(moonAngle)は地球の公転面(XZ平面)を基準に定義したうえで、
-    // その平面自体をMOON_ORBIT_TILT_QUATで傾けることで、月の軌道面の傾きを再現する
-    const moonOffset = new THREE.Vector3(Math.cos(moonAngle) * earthMoonDist, 0, Math.sin(moonAngle) * earthMoonDist)
+    // その平面自体をMOON_ORBIT_TILT_QUATで傾けることで、月の軌道面の傾きを再現する。
+    // EARTH_POSと同じく(cosθ, -sinθ)の符号にして、月の公転も北から見て反時計回りにする
+    const moonOffset = new THREE.Vector3(Math.cos(moonAngle) * earthMoonDist, 0, -Math.sin(moonAngle) * earthMoonDist)
       .applyQuaternion(MOON_ORBIT_TILT_QUAT)
     MOON_POS.set(EARTH_POS.x + moonOffset.x, moonOffset.y, EARTH_POS.z + moonOffset.z)
     return earthAngle
@@ -686,7 +690,8 @@ export class ScaleModel3D {
     const tiltedAngle = this.angleAroundEarthAxis(tiltedDir)
 
     const sunwardAngle = earthOrbitAngle + Math.PI // 地球から見た太陽の方向。computeOrbitalPositions()と同じ定義
-    const sunwardDir = new THREE.Vector3(Math.cos(sunwardAngle), 0, Math.sin(sunwardAngle))
+    // computeOrbitalPositions()のEARTH_POS/moonOffsetと同じ(cosθ, -sinθ)の符号に合わせる
+    const sunwardDir = new THREE.Vector3(Math.cos(sunwardAngle), 0, -Math.sin(sunwardAngle))
     const targetAngle = this.angleAroundEarthAxis(sunwardDir)
 
     const spinAngle = targetAngle - tiltedAngle
