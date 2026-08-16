@@ -5,6 +5,7 @@ import { t } from './i18n'
 import earthTextureUrl from './assets/earth-texture.png'
 import moonTextureUrl from './assets/moon-texture.png'
 import { PlaybackController } from './playbackController'
+import { DAY_MS, dayOfYearFraction, orbitalAngleFromEpoch, subsolarLonRad, localDirForLon, localDirForLatLon } from './orbitalMath'
 
 // ---- 実際の物理値(km)。月半径=1になるよう、常にこれらから比率を算出する ----
 const MOON_RADIUS_KM = 1737
@@ -315,11 +316,10 @@ export class ScaleModel3D {
   private earthAxisLine!: THREE.Line
   private sunLightTarget!: THREE.Object3D
 
-  private static readonly DAY_MS = 24 * 60 * 60 * 1000
   private static readonly SIM_PERIOD_MS: Record<SimMode, number> = {
-    day: ScaleModel3D.DAY_MS,
-    month: 30 * ScaleModel3D.DAY_MS,
-    year: 365 * ScaleModel3D.DAY_MS,
+    day: DAY_MS,
+    month: 30 * DAY_MS,
+    year: 365 * DAY_MS,
   }
   // 日/月/年どのモードも、既存の24hシミュレーションと同じ体感速度（1周期を24秒で再生）に揃える
   private static readonly SIM_REAL_DURATION_MS = 24_000
@@ -404,7 +404,7 @@ export class ScaleModel3D {
 
     // 東京の位置マーカー（円錐）。earthMeshの子にすることで、自転・公転・デフォルメの
     // 拡大縮小すべてに自動で追従する（別途フレームごとに位置を更新する必要がない）
-    const tokyoDir = ScaleModel3D.localDirForLatLon(
+    const tokyoDir = localDirForLatLon(
       THREE.MathUtils.degToRad(TOKYO_LAT_DEG), THREE.MathUtils.degToRad(TOKYO_LON_DEG)
     )
     const tokyoMarker = new THREE.Mesh(
@@ -861,23 +861,6 @@ export class ScaleModel3D {
     return new Date(this.simAnchorDate.getTime() + this.playback.elapsedMilliseconds)
   }
 
-  /** その年の1月1日からの経過日数の割合(0〜1未満)。円軌道の公転角度の基準に使う簡略計算 */
-  private static dayOfYearFraction(date: Date): number {
-    const startOfYear = new Date(date.getFullYear(), 0, 1, 0, 0, 0, 0)
-    const days = (date.getTime() - startOfYear.getTime()) / ScaleModel3D.DAY_MS
-    return (days / 365.25) % 1
-  }
-
-  // 内惑星（水星・金星・火星）用。公転周期が1年から大きくずれる（水星88日・火星687日）ため、
-  // dayOfYearFraction()のような「暦年で割ってmod 1」という簡略化は使えない
-  // （年境界(12/31→1/1)で角度が不連続に飛んでしまう）。固定の基準日からの経過日数をそのまま
-  // 周期で割ることで、年をまたいでも連続的に回り続けるようにする
-  private static readonly ORBIT_EPOCH_MS = Date.UTC(2000, 0, 1)
-  private static orbitalAngleFromEpoch(date: Date, periodDays: number): number {
-    const elapsedDays = (date.getTime() - ScaleModel3D.ORBIT_EPOCH_MS) / ScaleModel3D.DAY_MS
-    return (elapsedDays / periodDays) * Math.PI * 2
-  }
-
   /**
    * 円軌道で簡略化した公転運動により、太陽・地球・月の位置関係からEARTH_POS/MOON_POSを書き換える
    * （メッシュ等のシーングラフには触れない。syncSceneToOrbitalState()が別途反映する）。
@@ -893,7 +876,7 @@ export class ScaleModel3D {
     // Z成分の符号を反転させて(cosθ, -sinθ)にすることで、+Y(北)から見て反時計回り
     // （実際の公転方向。地球の自転と同じ向き）になるようにしている。単純な(cosθ, sinθ)は
     // +Y側から見て時計回りになってしまうため(issue-009で発覚したバグの修正)
-    const earthAngle = ScaleModel3D.dayOfYearFraction(date) * Math.PI * 2
+    const earthAngle = dayOfYearFraction(date) * Math.PI * 2
     EARTH_POS.set(Math.cos(earthAngle) * sunEarthDist, 0, -Math.sin(earthAngle) * sunEarthDist)
 
     const moonPhase = SunCalc.getMoonIllumination(date).phase // 0(新月)〜1(次の新月)
@@ -911,7 +894,7 @@ export class ScaleModel3D {
     for (const key of INNER_PLANET_KEYS) {
       const dist = this.deformMode
         ? ScaleModel3D.DEFORM_INNER_PLANET_DIST[key] : ScaleModel3D.REAL_INNER_PLANET_DIST[key]
-      const angle = ScaleModel3D.orbitalAngleFromEpoch(date, ScaleModel3D.INNER_PLANET_ORBIT_DAYS[key])
+      const angle = orbitalAngleFromEpoch(date, ScaleModel3D.INNER_PLANET_ORBIT_DAYS[key])
       ScaleModel3D.INNER_PLANET_POS[key].set(Math.cos(angle) * dist, 0, -Math.sin(angle) * dist)
     }
     return earthAngle
@@ -924,38 +907,6 @@ export class ScaleModel3D {
 
   private angleAroundEarthAxis(v: THREE.Vector3): number {
     return Math.atan2(v.dot(this.earthAxisRef2), v.dot(ScaleModel3D.EARTH_AXIS_REF1))
-  }
-
-  /**
-   * UTC時刻から、赤道上で今どの経度が太陽の正面（南中）にあるかを求める（分点補正は考慮しない
-   * 簡略計算）。UTC12時に経度0（グリニッジ）が南中する
-   */
-  private static subsolarLonRad(date: Date): number {
-    const utcHours = date.getUTCHours() + date.getUTCMinutes() / 60 + date.getUTCSeconds() / 3600
-    const lonDeg = ((12 - utcHours) * 15 + 180) % 360 - 180
-    return THREE.MathUtils.degToRad(lonDeg < -180 ? lonDeg + 360 : lonDeg)
-  }
-
-  /**
-   * SphereGeometryの頂点式(vertex.x=-r·cosφ, vertex.z=r·sinφ, φ=π+lon)から逆算した、
-   * 経度→メッシュのローカル座標系での方向（回転前、赤道上）
-   */
-  private static localDirForLon(lonRad: number): THREE.Vector3 {
-    return ScaleModel3D.localDirForLatLon(0, lonRad)
-  }
-
-  /**
-   * localDirForLon()を緯度ありに一般化したもの。SphereGeometryの極角θ=π/2-latを上の頂点式に
-   * 代入すると、緯度latの分だけY成分(cos θ = sin lat)が加わり、赤道方向の成分にcos latが掛かる形
-   * になる（lat=0で元のlocalDirForLon()と一致する）。都市マーカーなど地表の任意の点を
-   * 地球メッシュのローカル座標で表すのに使う
-   */
-  private static localDirForLatLon(latRad: number, lonRad: number): THREE.Vector3 {
-    return new THREE.Vector3(
-      Math.cos(lonRad) * Math.cos(latRad),
-      Math.sin(latRad),
-      -Math.sin(lonRad) * Math.cos(latRad)
-    )
   }
 
   /** computeOrbitalPositions()で求めたEARTH_POS/MOON_POSと、その時点の自転角度をシーンに反映する */
@@ -992,8 +943,8 @@ export class ScaleModel3D {
     // かつ、単なる時刻の端数ではなく「実際に今どの経度が太陽側を向くべきか」から逆算することで、
     // 地球儀のテクスチャ上の実在の経度（例: 日本 135°E）が実際の昼夜と対応するようにする
     const date = this.currentSimDate()
-    const subsolarLon = ScaleModel3D.subsolarLonRad(date)
-    const localDir = ScaleModel3D.localDirForLon(subsolarLon)
+    const subsolarLon = subsolarLonRad(date)
+    const localDir = localDirForLon(subsolarLon)
     const tiltedDir = localDir.applyQuaternion(this.earthTiltQuaternion)
     const tiltedAngle = this.angleAroundEarthAxis(tiltedDir)
 
