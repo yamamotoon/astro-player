@@ -54,6 +54,14 @@ const MOON_ORBIT_TILT_QUAT = new THREE.Quaternion()
 // 傾きは無視してY軸のまま扱う（潮汐固定の見た目には影響しない誤差）
 const MOON_SPIN_AXIS = new THREE.Vector3(0, 1, 0)
 
+// 地球儀上の位置マーカー（東京）。アプリの緯度経度入力欄の既定値(index.html #lat/#lng)と同じ
+const TOKYO_LAT_DEG = 35.6762
+const TOKYO_LON_DEG = 139.6503
+// マーカー(円錐)の大きさ。地球メッシュの子として実寸半径(EARTH_R)基準で置くので、
+// デフォルメ時の拡大縮小(applyDeformVisuals()のscale)にも自動で追従する
+const MARKER_HEIGHT = 0.5
+const MARKER_RADIUS = 0.15
+
 type BodyKey = 'sun' | 'earth' | 'moon'
 
 // 「系全体」ボタンで使う、その天体の衛星の公転半径（issue #006）。今日の実際の衛星の位置ではなく
@@ -319,6 +327,24 @@ export class ScaleModel3D {
     this.earthTiltQuaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), EARTH_AXIS)
     this.earthMesh.quaternion.copy(this.earthTiltQuaternion)
     this.scene.add(this.earthMesh)
+
+    // 東京の位置マーカー（円錐）。earthMeshの子にすることで、自転・公転・デフォルメの
+    // 拡大縮小すべてに自動で追従する（別途フレームごとに位置を更新する必要がない）
+    const tokyoDir = ScaleModel3D.localDirForLatLon(
+      THREE.MathUtils.degToRad(TOKYO_LAT_DEG), THREE.MathUtils.degToRad(TOKYO_LON_DEG)
+    )
+    const tokyoMarker = new THREE.Mesh(
+      new THREE.ConeGeometry(MARKER_RADIUS, MARKER_HEIGHT, 12),
+      new THREE.MeshBasicMaterial({ color: 0xff3b3b })
+    )
+    // 先端(頂点)がピンポイントで地表に接し、底面が外側に広がる「逆さの円錐」にする。
+    // meshの中心位置はさっきと同じ式のままでよい（向きを反転した分、先端が内側(EARTH_R)、
+    // 底面が外側(EARTH_R+MARKER_HEIGHT)に来るよう自動的にずれる）
+    tokyoMarker.position.copy(tokyoDir).multiplyScalar(EARTH_R + MARKER_HEIGHT / 2)
+    // ConeGeometryは既定でローカル+Y方向が底面→先端。地表の法線(tokyoDir)の「逆向き」に
+    // 先端を向けることで、先端が地球の中心側＝地表のピンポイントを指すようにする
+    tokyoMarker.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), tokyoDir.clone().negate())
+    this.earthMesh.add(tokyoMarker)
 
     // 地球の自転軸（デバッグ表示）: 公転軸(Y)から実際の地軸傾斜23.44度だけ傾いた向きに描画する。
     // 主役の天体・ラベルより控えめに見えるよう、短め・半透明の細い線にしている
@@ -736,7 +762,21 @@ export class ScaleModel3D {
    * 経度→メッシュのローカル座標系での方向（回転前、赤道上）
    */
   private static localDirForLon(lonRad: number): THREE.Vector3 {
-    return new THREE.Vector3(Math.cos(lonRad), 0, -Math.sin(lonRad))
+    return ScaleModel3D.localDirForLatLon(0, lonRad)
+  }
+
+  /**
+   * localDirForLon()を緯度ありに一般化したもの。SphereGeometryの極角θ=π/2-latを上の頂点式に
+   * 代入すると、緯度latの分だけY成分(cos θ = sin lat)が加わり、赤道方向の成分にcos latが掛かる形
+   * になる（lat=0で元のlocalDirForLon()と一致する）。都市マーカーなど地表の任意の点を
+   * 地球メッシュのローカル座標で表すのに使う
+   */
+  private static localDirForLatLon(latRad: number, lonRad: number): THREE.Vector3 {
+    return new THREE.Vector3(
+      Math.cos(lonRad) * Math.cos(latRad),
+      Math.sin(latRad),
+      -Math.sin(lonRad) * Math.cos(latRad)
+    )
   }
 
   /** computeOrbitalPositions()で求めたEARTH_POS/MOON_POSと、その時点の自転角度をシーンに反映する */
