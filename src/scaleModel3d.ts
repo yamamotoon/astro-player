@@ -19,6 +19,28 @@ const SUN_R = SUN_RADIUS_KM / MOON_RADIUS_KM
 const EARTH_MOON_DIST = EARTH_MOON_DIST_KM / MOON_RADIUS_KM
 const EARTH_SUN_DIST = EARTH_SUN_DIST_KM / MOON_RADIUS_KM
 
+// ---- 内惑星（水星・金星・火星）。地球の公転ビューアのみでON/OFFする(ScaleModelConfig.
+// showInnerPlanets)実験的な追加。衛星を持たない前提（火星の衛星フォボス/ダイモスは省略）で、
+// 「系全体」ボタン(REAL_SATELLITE_ORBIT_RADIUS等)にもエントリを作らない ----
+const MERCURY_RADIUS_KM = 2439.7
+const VENUS_RADIUS_KM = 6051.8
+const MARS_RADIUS_KM = 3389.5
+const MERCURY_SUN_DIST_KM = 57_900_000
+const VENUS_SUN_DIST_KM = 108_200_000
+const MARS_SUN_DIST_KM = 227_900_000
+// 公転周期(日)。地球のみdayOfYearFraction()（暦年基準、周期≒365.25日限定の簡略計算）を使うため、
+// 他の惑星はこの日数を使う専用の角度計算(orbitalAngleFromEpoch())を別途用意する
+const MERCURY_ORBIT_DAYS = 87.969
+const VENUS_ORBIT_DAYS = 224.701
+const MARS_ORBIT_DAYS = 686.980
+
+const MERCURY_R = MERCURY_RADIUS_KM / MOON_RADIUS_KM
+const VENUS_R = VENUS_RADIUS_KM / MOON_RADIUS_KM
+const MARS_R = MARS_RADIUS_KM / MOON_RADIUS_KM
+const MERCURY_SUN_DIST = MERCURY_SUN_DIST_KM / MOON_RADIUS_KM
+const VENUS_SUN_DIST = VENUS_SUN_DIST_KM / MOON_RADIUS_KM
+const MARS_SUN_DIST = MARS_SUN_DIST_KM / MOON_RADIUS_KM
+
 // ---- デフォルメモード（issue #007。実験的）----
 // 実際の相対サイズ比(約109:1)のままだと「認識できる大きさ」と「重ならない」が両立しないため、
 // デフォルメ時は太陽・地球・月を全て同じ半径にする。距離は「表面間のギャップ」から逆算することで
@@ -32,12 +54,26 @@ const DEFORM_SUN_EARTH_GAP = 8 * DEFORM_BODY_R
 const DEFORM_EARTH_MOON_DIST = 2 * DEFORM_BODY_R + DEFORM_EARTH_MOON_GAP
 const DEFORM_SUN_EARTH_DIST = 2 * DEFORM_BODY_R + DEFORM_SUN_EARTH_GAP
 
+// 内惑星のデフォルメ距離。既存のDEFORM_SUN_EARTH_DIST(=100)は変えない(既存3画面の見た目を
+// 変えないため)。水星・金星はその内側、火星は外側に、隣り合うリングの中心間距離が
+// 常に2*DEFORM_BODY_R(=20)以上空くように配置し、太陽・惑星同士がリング半径の差だけでは
+// 重ならないようにする。ただし月は地球を中心に別途EARTH_MOON_DISTぶん動くため、月と
+// 水星/金星/火星が特定の角度でごく稀に接近する可能性はこの計算だけでは排除できない
+// （3天体(太陽・地球・月)だけを対象にしたissue #007の重なり回避保証は、6天体には及ばない
+// 実験的な拡張であることの注記）
+const DEFORM_MERCURY_SUN_DIST = 40
+const DEFORM_VENUS_SUN_DIST = 70
+const DEFORM_MARS_SUN_DIST = 170
+
 // 太陽を原点（この系で唯一動かない基準点）、Y=公転面(黄道面=XZ平面)の法線。
 // 地球・月の位置は円軌道で簡略化した公転運動により、毎フレームcomputeOrbitalPositions()が
 // この2つのVector3を書き換える（他の箇所はこのオブジェクトへの参照を持ち続けるだけでよい）
 const SUN_POS = new THREE.Vector3(0, 0, 0)
 const EARTH_POS = new THREE.Vector3(EARTH_SUN_DIST, 0, 0)
 const MOON_POS = new THREE.Vector3(EARTH_SUN_DIST, 0, EARTH_MOON_DIST)
+const MERCURY_POS = new THREE.Vector3(MERCURY_SUN_DIST, 0, 0)
+const VENUS_POS = new THREE.Vector3(VENUS_SUN_DIST, 0, 0)
+const MARS_POS = new THREE.Vector3(MARS_SUN_DIST, 0, 0)
 
 // 地球の自転軸: 公転面の法線(Y)に対して実際の地軸傾斜23.44度だけ傾ける。
 // 符号は-EARTH_AXIAL_TILT_DEGにする(+だと北半球の夏至(6月)に北極が反太陽側を向いてしまい、
@@ -65,7 +101,12 @@ const TOKYO_LON_DEG = 139.6503
 const MARKER_HEIGHT = 0.5
 const MARKER_RADIUS = 0.15
 
-type BodyKey = 'sun' | 'earth' | 'moon'
+type BodyKey = 'sun' | 'mercury' | 'venus' | 'earth' | 'mars' | 'moon'
+// 内惑星3つ(showInnerPlanets=trueの時だけ使う)。太陽に近い順（配置・ループの基準順）
+const INNER_PLANET_KEYS = ['mercury', 'venus', 'mars'] as const
+// 表示/非表示に関わらず全天体。scale適用など「見えているかは関係なく全部そろえておきたい」処理で使う
+// （表示対象を絞るactiveBodyKeys()とは目的が違うので取り違えないよう別名にしている）
+const ALL_BODY_KEYS: BodyKey[] = ['sun', 'mercury', 'venus', 'earth', 'mars', 'moon']
 
 // 「系全体」ボタンで使う、その天体の衛星の公転半径（issue #006）。今日の実際の衛星の位置ではなく
 // 公転半径そのものを使うことで、衛星が軌道上のどこにいても画面外に出ない、日付に依存しない距離に
@@ -93,6 +134,8 @@ export interface ScaleModelConfig {
   deformDefault: boolean
   /** カメラが最初にフォーカスする対象天体 */
   defaultTarget: BodyKey
+  /** 水星・金星・火星を表示するか（実験的。既定はfalseで既存3画面の見た目を変えない） */
+  showInnerPlanets?: boolean
 }
 
 export class ScaleModel3D {
@@ -196,6 +239,9 @@ export class ScaleModel3D {
 
   // このインスタンスで表示するモード（ScaleModelConfig.availableModes）。時間バーのボタン表示に使う
   private availableModes: SimMode[] = ['day', 'month', 'year']
+  // 水星・金星・火星を表示するか（ScaleModelConfig.showInnerPlanets）。activeBodyKeys()が
+  // ラベル・当たり判定・軌道円などループ対象を絞るのに使う唯一の分岐点
+  private showInnerPlanets = false
 
   // タップ/クリック判定用（ブラウザのclickイベントはドラッグ後のmouseupでも発火してしまうため、
   // pointerdown/pointerup間の移動量を自前で見て「実質動いていない時だけタップ扱い」にする）。
@@ -231,6 +277,30 @@ export class ScaleModel3D {
   // 選択中の天体を示す輪郭（本体をわずかに拡大し裏面だけ描画する殻。本体のテクスチャ/マテリアルには
   // 一切触れないので見た目が変わらない）
   private outlineByKey!: Record<BodyKey, THREE.Mesh>
+  // ラベル・引き出し線もキーで引けるようにする（updateLabels()等の汎用ループ用。sun/earth/moonは
+  // sunLabel等の個別フィールドとしても持ち続けるが、こちらはループ処理専用の参照先）
+  private labelByKey!: Record<BodyKey, THREE.Sprite>
+  private labelFracByKey!: Record<BodyKey, { halfWFrac: number; halfHFrac: number }>
+  private leaderByKey!: Record<BodyKey, THREE.Line>
+
+  // 内惑星（水星・金星・火星）専用のメッシュ・軌道円ルックアップ。showInnerPlanets=falseの時は
+  // 常に3つとも存在はするが.visible=falseで非表示にする（activeBodyKeys()もこのキーを含めない）
+  private innerPlanetMeshByKey: Partial<Record<BodyKey, THREE.Mesh>> = {}
+  private innerPlanetOrbitLineByKey: Partial<Record<BodyKey, THREE.LineLoop>> = {}
+  private static readonly REAL_INNER_PLANET_DIST: Record<'mercury' | 'venus' | 'mars', number> = {
+    mercury: MERCURY_SUN_DIST, venus: VENUS_SUN_DIST, mars: MARS_SUN_DIST,
+  }
+  private static readonly DEFORM_INNER_PLANET_DIST: Record<'mercury' | 'venus' | 'mars', number> = {
+    mercury: DEFORM_MERCURY_SUN_DIST, venus: DEFORM_VENUS_SUN_DIST, mars: DEFORM_MARS_SUN_DIST,
+  }
+  private static readonly INNER_PLANET_ORBIT_DAYS: Record<'mercury' | 'venus' | 'mars', number> = {
+    mercury: MERCURY_ORBIT_DAYS, venus: VENUS_ORBIT_DAYS, mars: MARS_ORBIT_DAYS,
+  }
+  // モジュール直下のMERCURY_POS等（EARTH_POS/MOON_POSと同じく、computeOrbitalPositions()が
+  // 毎フレーム書き換える共有Vector3）をキーで引けるようにする
+  private static readonly INNER_PLANET_POS: Record<'mercury' | 'venus' | 'mars', THREE.Vector3> = {
+    mercury: MERCURY_POS, venus: VENUS_POS, mars: MARS_POS,
+  }
 
   // ---- 時間連動（自転・公転・シークバー） ----
   // シークバーの起点(0%)は常に「モードに入った時点の実時刻」。そこから未来方向にのみ進む
@@ -261,6 +331,7 @@ export class ScaleModel3D {
     this.deformMode = config.deformDefault
     this.simMode = config.defaultMode
     this.targetBody = config.defaultTarget
+    this.showInnerPlanets = config.showInnerPlanets ?? false
     this.playback.setPeriod(ScaleModel3D.SIM_PERIOD_MS[config.defaultMode])
 
     // カメラの初期位置がEARTH_POSを参照するため、メッシュ等を作る前に一度、実際の現在時刻
@@ -378,6 +449,37 @@ export class ScaleModel3D {
     this.moonMesh.userData.radius = MOON_R
     this.scene.add(this.moonMesh)
 
+    // 内惑星（水星・金星・火星。showInnerPlanets時のみ表示。実験的な追加）。
+    // 専用のテクスチャ画像は用意していないため、実際の見た目に近い単色球で代用する。
+    // 衛星を持たない前提（火星の衛星は省略）で、地球のような自転軸傾斜・自転アニメーションも
+    // 持たせず、太陽を周回する動きだけを表現する
+    const innerPlanetVisual: Record<typeof INNER_PLANET_KEYS[number], { radius: number; color: number }> = {
+      mercury: { radius: MERCURY_R, color: 0x9c9490 },
+      venus: { radius: VENUS_R, color: 0xe8d4a0 },
+      mars: { radius: MARS_R, color: 0xc1440e },
+    }
+    const innerPlanetPos: Record<typeof INNER_PLANET_KEYS[number], THREE.Vector3> = {
+      mercury: MERCURY_POS, venus: VENUS_POS, mars: MARS_POS,
+    }
+    for (const key of INNER_PLANET_KEYS) {
+      const { radius, color } = innerPlanetVisual[key]
+      const mesh = new THREE.Mesh(
+        new THREE.SphereGeometry(radius, 24, 18),
+        new THREE.MeshLambertMaterial({ color })
+      )
+      mesh.position.copy(innerPlanetPos[key])
+      mesh.userData.radius = radius
+      mesh.visible = this.showInnerPlanets
+      this.scene.add(mesh)
+      this.innerPlanetMeshByKey[key] = mesh
+
+      const orbitLine = this.makeOrbitLine(0x6a86b8)
+      orbitLine.scale.setScalar(this.deformMode ? ScaleModel3D.DEFORM_INNER_PLANET_DIST[key] : ScaleModel3D.REAL_INNER_PLANET_DIST[key])
+      orbitLine.visible = this.showInnerPlanets
+      this.scene.add(orbitLine)
+      this.innerPlanetOrbitLineByKey[key] = orbitLine
+    }
+
     // 太陽→地球方向の平行光線（実際の太陽光の近似）。月もほぼ同じ方向で照らされるため、
     // Sun→Earthの1本のDirectionalLightを共用する
     const sunLight = new THREE.DirectionalLight(0xffffff, 1.6)
@@ -409,9 +511,48 @@ export class ScaleModel3D {
     this.moonLabelFrac = { halfWFrac: moonLabelInfo.halfWFrac, halfHFrac: moonLabelInfo.halfHFrac }
     this.scene.add(this.moonLabel)
 
-    this.meshByKey = { sun: this.sunMesh, earth: this.earthMesh, moon: this.moonMesh }
-    this.posByKey = { sun: SUN_POS, earth: EARTH_POS, moon: MOON_POS }
-    this.radiusByKey = { sun: SUN_R, earth: EARTH_R, moon: MOON_R }
+    // 内惑星のラベル・引き出し線（showInnerPlanets=falseの間はメッシュと同様.visible=falseにする）。
+    // labelByKey等の全キー分をここで一度に作る都合上、いったんローカルに集めてから
+    // 下の最終的なRecord組み立てでsun/earth/moonの分とまとめて代入する
+    const innerPlanetLabelColor: Record<typeof INNER_PLANET_KEYS[number], string> = {
+      mercury: '#b8afa8', venus: '#e8d4a0', mars: '#e08050',
+    }
+    const innerPlanetLabelKeyName: Record<typeof INNER_PLANET_KEYS[number], string> = {
+      mercury: 'label-mercury', venus: 'label-venus', mars: 'label-mars',
+    }
+    const innerPlanetLabelSprite: Partial<Record<BodyKey, THREE.Sprite>> = {}
+    const innerPlanetLabelFrac: Partial<Record<BodyKey, { halfWFrac: number; halfHFrac: number }>> = {}
+    const innerPlanetLabelMap: Partial<Record<BodyKey, { normal: THREE.Texture; selected: THREE.Texture }>> = {}
+    const innerPlanetLeader: Partial<Record<BodyKey, THREE.Line>> = {}
+    const innerPlanetOutline: Partial<Record<BodyKey, THREE.Mesh>> = {}
+    for (const key of INNER_PLANET_KEYS) {
+      const info = this.makeLabel(t(innerPlanetLabelKeyName[key]), innerPlanetLabelColor[key])
+      info.sprite.visible = this.showInnerPlanets
+      this.scene.add(info.sprite)
+      innerPlanetLabelSprite[key] = info.sprite
+      innerPlanetLabelFrac[key] = { halfWFrac: info.halfWFrac, halfHFrac: info.halfHFrac }
+      innerPlanetLabelMap[key] = { normal: info.normalMap, selected: info.selectedMap }
+
+      const leader = this.makeLeaderLine('#8899bb')
+      leader.visible = this.showInnerPlanets
+      this.scene.add(leader)
+      innerPlanetLeader[key] = leader
+
+      innerPlanetOutline[key] = this.makeOutlineHull(this.innerPlanetMeshByKey[key]!)
+    }
+
+    this.meshByKey = {
+      sun: this.sunMesh, earth: this.earthMesh, moon: this.moonMesh,
+      mercury: this.innerPlanetMeshByKey.mercury!, venus: this.innerPlanetMeshByKey.venus!, mars: this.innerPlanetMeshByKey.mars!,
+    }
+    this.posByKey = {
+      sun: SUN_POS, earth: EARTH_POS, moon: MOON_POS,
+      mercury: MERCURY_POS, venus: VENUS_POS, mars: MARS_POS,
+    }
+    this.radiusByKey = {
+      sun: SUN_R, earth: EARTH_R, moon: MOON_R,
+      mercury: MERCURY_R, venus: VENUS_R, mars: MARS_R,
+    }
     // config.deformDefault=trueで起動した場合、ここでメッシュのscale・カメラの最小ズーム距離を
     // 最初から合わせておく（toggleDeformMode()参照。実寸起動時はscale=1になるだけで無害）
     this.applyDeformVisuals()
@@ -419,11 +560,13 @@ export class ScaleModel3D {
       sun: this.makeOutlineHull(this.sunMesh),
       earth: this.makeOutlineHull(this.earthMesh),
       moon: this.makeOutlineHull(this.moonMesh),
+      mercury: innerPlanetOutline.mercury!, venus: innerPlanetOutline.venus!, mars: innerPlanetOutline.mars!,
     }
     this.labelMaps = {
       sun: { normal: sunLabelInfo.normalMap, selected: sunLabelInfo.selectedMap },
       earth: { normal: earthLabelInfo.normalMap, selected: earthLabelInfo.selectedMap },
       moon: { normal: moonLabelInfo.normalMap, selected: moonLabelInfo.selectedMap },
+      mercury: innerPlanetLabelMap.mercury!, venus: innerPlanetLabelMap.venus!, mars: innerPlanetLabelMap.mars!,
     }
 
     // 天体の実座標とラベル位置を結ぶ引き出し線（両端はupdateLabels()で毎フレーム更新する）
@@ -431,6 +574,20 @@ export class ScaleModel3D {
     this.earthLeader = this.makeLeaderLine('#8899bb')
     this.moonLeader = this.makeLeaderLine('#8899bb')
     this.scene.add(this.sunLeader, this.earthLeader, this.moonLeader)
+
+    // ラベル・引き出し線をキーで引けるようにまとめる（updateLabels()等の汎用ループで使う）
+    this.labelByKey = {
+      sun: this.sunLabel, earth: this.earthLabel, moon: this.moonLabel,
+      mercury: innerPlanetLabelSprite.mercury!, venus: innerPlanetLabelSprite.venus!, mars: innerPlanetLabelSprite.mars!,
+    }
+    this.labelFracByKey = {
+      sun: this.sunLabelFrac, earth: this.earthLabelFrac, moon: this.moonLabelFrac,
+      mercury: innerPlanetLabelFrac.mercury!, venus: innerPlanetLabelFrac.venus!, mars: innerPlanetLabelFrac.mars!,
+    }
+    this.leaderByKey = {
+      sun: this.sunLeader, earth: this.earthLeader, moon: this.moonLeader,
+      mercury: innerPlanetLeader.mercury!, venus: innerPlanetLeader.venus!, mars: innerPlanetLeader.mars!,
+    }
 
     // デバッグ用: ラベルサイズの枠線（-0.5〜0.5の単位正方形を、updateLabels()で
     // 実測したtextHalfW/textHalfHのワールドサイズに拡大縮小し、カメラの向きに合わせて配置する）
@@ -711,6 +868,16 @@ export class ScaleModel3D {
     return (days / 365.25) % 1
   }
 
+  // 内惑星（水星・金星・火星）用。公転周期が1年から大きくずれる（水星88日・火星687日）ため、
+  // dayOfYearFraction()のような「暦年で割ってmod 1」という簡略化は使えない
+  // （年境界(12/31→1/1)で角度が不連続に飛んでしまう）。固定の基準日からの経過日数をそのまま
+  // 周期で割ることで、年をまたいでも連続的に回り続けるようにする
+  private static readonly ORBIT_EPOCH_MS = Date.UTC(2000, 0, 1)
+  private static orbitalAngleFromEpoch(date: Date, periodDays: number): number {
+    const elapsedDays = (date.getTime() - ScaleModel3D.ORBIT_EPOCH_MS) / ScaleModel3D.DAY_MS
+    return (elapsedDays / periodDays) * Math.PI * 2
+  }
+
   /**
    * 円軌道で簡略化した公転運動により、太陽・地球・月の位置関係からEARTH_POS/MOON_POSを書き換える
    * （メッシュ等のシーングラフには触れない。syncSceneToOrbitalState()が別途反映する）。
@@ -738,6 +905,15 @@ export class ScaleModel3D {
     const moonOffset = new THREE.Vector3(Math.cos(moonAngle) * earthMoonDist, 0, -Math.sin(moonAngle) * earthMoonDist)
       .applyQuaternion(MOON_ORBIT_TILT_QUAT)
     MOON_POS.set(EARTH_POS.x + moonOffset.x, moonOffset.y, EARTH_POS.z + moonOffset.z)
+
+    // 内惑星（showInnerPlanets=falseでも非表示なだけで位置自体は常に計算しておく。
+    // 表示切替した瞬間にも正しい位置になっている必要があるため）
+    for (const key of INNER_PLANET_KEYS) {
+      const dist = this.deformMode
+        ? ScaleModel3D.DEFORM_INNER_PLANET_DIST[key] : ScaleModel3D.REAL_INNER_PLANET_DIST[key]
+      const angle = ScaleModel3D.orbitalAngleFromEpoch(date, ScaleModel3D.INNER_PLANET_ORBIT_DAYS[key])
+      ScaleModel3D.INNER_PLANET_POS[key].set(Math.cos(angle) * dist, 0, -Math.sin(angle) * dist)
+    }
     return earthAngle
   }
 
@@ -794,6 +970,15 @@ export class ScaleModel3D {
     this.earthOrbitLine.scale.setScalar(this.deformMode ? DEFORM_SUN_EARTH_DIST : EARTH_SUN_DIST)
     this.moonOrbitLine.position.copy(EARTH_POS)
     this.moonOrbitLine.scale.setScalar(this.deformMode ? DEFORM_EARTH_MOON_DIST : EARTH_MOON_DIST)
+
+    // 内惑星: 位置とその軌道円の半径を毎フレーム反映する（showInnerPlanets=falseでも非表示なだけで
+    // 位置計算・同期自体は続ける。表示切替した瞬間に正しい位置になっている必要があるため）
+    for (const key of INNER_PLANET_KEYS) {
+      this.innerPlanetMeshByKey[key]!.position.copy(ScaleModel3D.INNER_PLANET_POS[key])
+      this.innerPlanetOrbitLineByKey[key]!.scale.setScalar(
+        this.deformMode ? ScaleModel3D.DEFORM_INNER_PLANET_DIST[key] : ScaleModel3D.REAL_INNER_PLANET_DIST[key]
+      )
+    }
 
     // 月は自転周期=公転周期(潮汐固定)で、常に同じ面(テクスチャの経度0=実写で地球側だった面)を
     // 地球へ向け続ける。自転速度を時間から積分するのではなく、地球への方向ベクトルから毎フレーム
@@ -956,10 +1141,11 @@ export class ScaleModel3D {
     this.raycaster.setFromCamera(ndc, this.camera)
     // recursive=falseを明示: 選択中の輪郭殻(makeOutlineHull)が各天体の子オブジェクトとして
     // ぶら下がっており、既定のrecursive=trueだとそちらまで拾ってしまうため
-    const hits = this.raycaster.intersectObjects([this.sunMesh, this.earthMesh, this.moonMesh], false)
+    const activeKeys = this.activeBodyKeys()
+    const hits = this.raycaster.intersectObjects(activeKeys.map(key => this.meshByKey[key]), false)
     if (hits.length > 0) {
       const mesh = hits[0].object
-      for (const key of ['sun', 'earth', 'moon'] as const) {
+      for (const key of activeKeys) {
         if (this.meshByKey[key] === mesh) return key
       }
     }
@@ -973,8 +1159,8 @@ export class ScaleModel3D {
     const canvasHeightPx = Math.max(this.renderer.domElement.clientHeight, 1)
     const halfHPx = (ScaleModel3D.LABEL_HEIGHT_FRACTION / 2) * canvasHeightPx * ScaleModel3D.LABEL_HIT_PADDING
     const halfWPx = halfHPx * 4 // ラベル用canvasは256x64(4:1)
-    for (const key of ['sun', 'earth', 'moon'] as const) {
-      const sprite = key === 'sun' ? this.sunLabel : key === 'earth' ? this.earthLabel : this.moonLabel
+    for (const key of this.activeBodyKeys()) {
+      const sprite = this.labelByKey[key]
       const ndc = sprite.position.clone().project(this.camera)
       if (ndc.z < -1 || ndc.z > 1) continue // カメラの後ろ側は対象外
       const sx = rect.left + (ndc.x * 0.5 + 0.5) * rect.width
@@ -998,9 +1184,18 @@ export class ScaleModel3D {
     return this.deformMode ? DEFORM_BODY_R : this.radiusByKey[key]
   }
 
+  /**
+   * ラベル表示・当たり判定・frameAll()等の対象にする天体一覧。太陽・地球・月は常に対象。
+   * 水星・金星・火星はthis.showInnerPlanetsがtrueの時だけ対象に含める（falseの間はメッシュ・
+   * ラベルとも.visible=falseにしてあるので、タップ判定やラベル衝突計算からも除外し無駄を省く）
+   */
+  private activeBodyKeys(): BodyKey[] {
+    return this.showInnerPlanets ? ALL_BODY_KEYS : (['sun', 'earth', 'moon'] as const)
+  }
+
   /** frameAll()・ラベル当たり判定で使う、今の見た目(デフォルメ込み)の天体一覧 */
   private focusableBodies(): { pos: THREE.Vector3; radius: number }[] {
-    return (['sun', 'earth', 'moon'] as const).map(key => ({
+    return this.activeBodyKeys().map(key => ({
       pos: this.posByKey[key], radius: this.displayRadius(key),
     }))
   }
@@ -1033,7 +1228,7 @@ export class ScaleModel3D {
    * (太陽〜地球=100)になり、巨大な太陽メッシュにカメラが埋まる不具合があった
    */
   private applyDeformVisuals() {
-    for (const key of ['sun', 'earth', 'moon'] as const) {
+    for (const key of ALL_BODY_KEYS) {
       const scale = this.deformMode ? DEFORM_BODY_R / this.radiusByKey[key] : 1
       this.meshByKey[key].scale.setScalar(scale)
     }
@@ -1297,9 +1492,10 @@ export class ScaleModel3D {
       return { nx, ny, overlap }
     }
 
-    // 天体ごと（太陽・地球・月の順、labels/spheresと同じ順）の「実際に見えている文字」の
+    // 天体ごと（activeBodyKeys()の順、labels/spheresと同じ順）の「実際に見えている文字」の
     // 半幅・半高（tan空間）。canvas全体(箱)のhalfW/halfHに、ctx.measureText()で測った比率を掛ける
-    const labelFracs = [this.sunLabelFrac, this.earthLabelFrac, this.moonLabelFrac]
+    const activeKeys = this.activeBodyKeys()
+    const labelFracs = activeKeys.map(key => this.labelFracByKey[key])
     const textHalfWs = labelFracs.map(f => labelHalfW * f.halfWFrac)
     const textHalfHs = labelFracs.map(f => labelHalfH * f.halfHFrac)
     // ラベル同士の衝突回避（①）用の半径。ここも実測テキストサイズを使わないと、天体同士が
@@ -1322,11 +1518,9 @@ export class ScaleModel3D {
       if (mat.map !== wantMap) { mat.map = wantMap; mat.needsUpdate = true }
       return { key, sprite, leader, bodyPos, depth: p.depth, baseX: p.x, baseY: p.y, x: p.x, y: p.y }
     }
-    const labels = [
-      makeLabelState('sun', this.sunLabel, this.sunLeader, SUN_POS),
-      makeLabelState('earth', this.earthLabel, this.earthLeader, EARTH_POS),
-      makeLabelState('moon', this.moonLabel, this.moonLeader, MOON_POS),
-    ]
+    const labels = activeKeys.map(key =>
+      makeLabelState(key, this.labelByKey[key], this.leaderByKey[key], this.posByKey[key])
+    )
 
     const spheres = this.focusableBodies().map(b => {
       const p = project(b.pos)
@@ -1478,11 +1672,15 @@ export class ScaleModel3D {
         selected: new THREE.CanvasTexture(this.drawLabelCanvas(text, color, true)),
       }
       // 実際にどちらのmapを貼るかはupdateLabels()が毎フレーム選択状態を見て同期する
+      this.labelFracByKey[key] = frac // labelFracByKeyもここで直接更新しないとupdateLabels()に反映されない
       return frac
     }
     this.sunLabelFrac = rewrite('sun', t('label-sun'), '#ffee44')
     this.earthLabelFrac = rewrite('earth', t('label-earth'), '#8fc0ff')
     this.moonLabelFrac = rewrite('moon', t('label-moon'), '#ccd4ee')
+    rewrite('mercury', t('label-mercury'), '#b8afa8')
+    rewrite('venus', t('label-venus'), '#e8d4a0')
+    rewrite('mars', t('label-mars'), '#e08050')
   }
 
   handleResize() {

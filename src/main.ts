@@ -51,8 +51,10 @@ const SCALE_CONFIG_FULL: ScaleModelConfig = {
 const SCALE_CONFIG_ORBIT: ScaleModelConfig = {
   // 地球の公転ビューア: 地球の公転・月の動き（満ち欠け）が主役。日モードは出さない。
   // 注視点は太陽（原点で動かない）。地球を注視点にすると毎フレーム地球へ追従してしまい、
-  // 逆に太陽側が地球の周りを回っているように見えてしまうため
+  // 逆に太陽側が地球の周りを回っているように見えてしまうため。
+  // 水星・金星・火星もここだけ表示する（実験的。フラグ1つで他画面には影響しない）
   availableModes: ['month', 'year'], defaultMode: 'month', deformDefault: true, defaultTarget: 'sun',
+  showInnerPlanets: true,
 }
 const SCALE_CONFIG_SPIN: ScaleModelConfig = {
   // 地球の自転ビューア: 地球の自転(昼夜)・月の潮汐固定が主役。年モードは出さない

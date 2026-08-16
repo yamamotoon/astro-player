@@ -61,6 +61,9 @@ const TRANSLATIONS: Record<Lang, Record<string, string>> = {
     'label-sun':           '太陽',
     'label-moon':          '月',
     'label-earth':         '地球',
+    'label-mercury':       '水星',
+    'label-venus':         '金星',
+    'label-mars':          '火星',
   },
   en: {
     'page-title':          'StarCanvas Hoshizora - Sun & Moon Simulator',
@@ -122,6 +125,9 @@ const TRANSLATIONS: Record<Lang, Record<string, string>> = {
     'label-sun':           'Sun',
     'label-moon':          'Moon',
     'label-earth':         'Earth',
+    'label-mercury':       'Mercury',
+    'label-venus':         'Venus',
+    'label-mars':          'Mars',
   },
 }
 
