@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>StarCanvas Hoshizora - 太陽・月位置シミュレーター</title>
+  <script type="module" crossorigin src="/StarCanvas-Hoshizora/assets/index-zBMJ5Ecq.js"></script>
+  <link rel="stylesheet" crossorigin href="/StarCanvas-Hoshizora/assets/index-CukgO7UV.css">
+</head>
+<body>
+  <header>
+    <h1 data-i18n="h1">StarCanvas Hoshizora &mdash; 太陽・月位置シミュレーター</h1>
+    <div class="header-actions">
+      <button id="lang-btn" class="lang-btn">EN</button>
+      <button id="toggle-controls" class="toggle-controls" aria-expanded="true" aria-label="設定を開閉" data-i18n-aria-label="toggle-aria">設定 ▲</button>
+    </div>
+  </header>
+
+  <nav class="top-nav" id="back-nav" hidden>
+    <button id="back-to-menu-btn" class="top-nav-link" data-i18n="nav-menu">☰ メニュー</button>
+  </nav>
+
+  <main>
+    <!-- メニュー シーン -->
+    <section id="scene-menu" class="menu-main">
+      <button id="menu-dashboard-btn" class="menu-card">
+        <span class="menu-card-icon">🪐</span>
+        <span class="menu-card-title" data-i18n="nav-dashboard">3D+2D</span>
+        <span class="menu-card-desc" data-i18n="menu-dashboard-desc">3D天球・2D方位図・天体情報</span>
+      </button>
+      <button id="menu-sky-btn" class="menu-card">
+        <span class="menu-card-icon">🔭</span>
+        <span class="menu-card-title" data-i18n="nav-sky">SKY</span>
+        <span class="menu-card-desc" data-i18n="menu-sky-desc">ジャイロで天球を見るARビュー</span>
+      </button>
+    </section>
+
+    <!-- 共有の設定パネル: メニュー以外の全シーンで表示 -->
+    <section id="scene-hud" style="display: none">
+      <section class="controls">
+        <div class="control-group">
+          <label data-i18n="location">場所</label>
+          <div class="location-inputs">
+            <span data-i18n="lat">緯度</span>
+            <input type="number" id="lat" value="35.6762" step="0.0001" min="-90" max="90">
+            <span data-i18n="lng">経度</span>
+            <input type="number" id="lng" value="139.6503" step="0.0001" min="-180" max="180">
+          </div>
+        </div>
+        <div class="control-group">
+          <label data-i18n="datetime">日時</label>
+          <input type="datetime-local" id="datetime">
+          <label class="realtime-label">
+            <input type="checkbox" id="realtime" checked>
+            <span data-i18n="realtime">リアルタイム更新</span>
+          </label>
+          <span id="const-toggles">
+            <label class="realtime-label">
+              <input type="checkbox" id="show-constellations">
+              <span data-i18n="show-constellations">星座表示</span>
+            </label>
+            <label class="realtime-label">
+              <input type="checkbox" id="show-famous">
+              <span data-i18n="show-famous">有名な星座</span>
+            </label>
+            <label class="realtime-label">
+              <input type="checkbox" id="show-triangles">
+              <span data-i18n="show-triangles">大三角形</span>
+            </label>
+          </span>
+        </div>
+      </section>
+    </section>
+
+    <!-- 3D+2D シーン -->
+    <section id="scene-dashboard" class="views" style="display: none">
+      <div class="view-3d">
+        <div class="view-title">
+          <span data-i18n="view-3d">3D 天球</span>
+          <button class="fullscreen-btn" data-target="view3d" title="フルスクリーン" data-i18n-title="fullscreen-title">⛶</button>
+        </div>
+        <canvas id="canvas3d"></canvas>
+      </div>
+      <div class="view-right">
+        <div class="view-2d">
+          <div class="view-title">
+            <span data-i18n="view-2d">2D 方位図</span>
+            <button class="fullscreen-btn" data-target="view2d" title="フルスクリーン" data-i18n-title="fullscreen-title">⛶</button>
+          </div>
+          <canvas id="canvas2d" width="280" height="280"></canvas>
+        </div>
+        <div class="info-panel">
+          <div class="view-title" data-i18n="celestial-info">天体情報</div>
+          <table id="info-table">
+            <thead>
+              <tr><th data-i18n="col-item">項目</th><th data-i18n="col-sun">太陽</th><th data-i18n="col-moon">月</th></tr>
+            </thead>
+            <tbody>
+              <tr><td data-i18n="row-az">方位角</td><td id="sun-az">-</td><td id="moon-az">-</td></tr>
+              <tr><td data-i18n="row-alt">高度角</td><td id="sun-alt">-</td><td id="moon-alt">-</td></tr>
+              <tr><td data-i18n="row-rise">出</td><td id="sun-rise">-</td><td id="moon-rise">-</td></tr>
+              <tr><td data-i18n="row-set">入り</td><td id="sun-set">-</td><td id="moon-set">-</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- SKY シーン -->
+    <section id="scene-sky" class="sky-view" style="display: none">
+      <div class="view-title">
+        <span data-i18n="view-sky">SKY（ジャイロで天球内を見る）</span>
+        <button class="fullscreen-btn" data-target="skyview" title="フルスクリーン" data-i18n-title="fullscreen-title">⛶</button>
+      </div>
+      <div id="ar-panel" class="ar-panel">
+        <video id="ar-video" hidden></video>
+        <canvas id="ar-canvas" class="ar-canvas"></canvas>
+        <div class="ar-hud">
+          <span id="skyview-mode" class="skyview-mode"></span>
+        </div>
+        <div class="zoom-slider-wrap">
+          <input type="range" id="zoom-slider" class="zoom-slider" min="10" max="70" value="60" step="1">
+        </div>
+      </div>
+    </section>
+
+    <!-- 24hシークバー: 画面下部・メニュー以外の全シーンで表示（スマホでの片手操作用） -->
+    <section id="scene-playback" class="playback" style="display: none">
+      <button id="play-btn" class="play-btn" title="24時間シミュレーション 再生/停止" data-i18n-title="play-title">▶</button>
+      <span class="playback-label">24h sim</span>
+      <div class="seekbar-wrap">
+        <div class="seekbar-track-row">
+          <input type="range" id="seekbar" min="0" max="1439" value="0" class="seekbar">
+        </div>
+        <div class="seekbar-ticks">
+          <span>0h</span><span>3h</span><span>6h</span><span>9h</span><span>12h</span><span>15h</span><span>18h</span><span>21h</span><span>24h</span>
+        </div>
+      </div>
+    </section>
+  </main>
+</body>
+</html>
