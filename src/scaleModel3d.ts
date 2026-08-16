@@ -154,7 +154,7 @@ export class ScaleModel3D {
   private stepGroupFwdB = document.getElementById('scale-step-fwd-b') as HTMLElement
   private stepABackBtn = document.getElementById('scale-step-a-back') as HTMLButtonElement
   private stepAFwdBtn = document.getElementById('scale-step-a-fwd') as HTMLButtonElement
-  private stepUiVariant: 'A' | 'B' = 'A'
+  private stepUiVariant: 'A' | 'B' = 'B'
   // 案A: 選択中のモードに応じて1ステップの刻み幅を変える（日→1時間、月→1日、年→1か月）。
   // クラス先頭側のフィールド初期化子はDAY_MS（クラス下部で定義）より先に評価されるため、
   // ここでは参照できず素の値を書く
@@ -521,7 +521,7 @@ export class ScaleModel3D {
     for (const btn of document.querySelectorAll<HTMLButtonElement>('#scale-step-back-b .step-btn, #scale-step-fwd-b .step-btn')) {
       const unit = btn.dataset.unit as 'hour' | 'day' | 'month'
       const dir = Number(btn.dataset.dir)
-      this.on(btn, 'click', () => this.stepBy(ScaleModel3D.STEP_B_DELTA_MS[unit] * dir))
+      this.on(btn, 'click', () => this.stepAnchorBy(ScaleModel3D.STEP_B_DELTA_MS[unit] * dir))
     }
     this.updateStepUiVariant()
     this.updateStepALabels()
@@ -833,10 +833,24 @@ export class ScaleModel3D {
 
   // ---- ステップ再生 A/B比較用（一時的。docs/issue-009。判断がついたら片方を削除する） ----
 
-  /** 現在の再生位置から±deltaMsだけ移動する（周期の範囲でクランプ）。手動シークと同様、再生中なら止める */
+  /** 案A用: 現在の再生位置から±deltaMsだけ移動する（シークバーの周期範囲でクランプ）。
+   *  手動シークと同様、再生中なら止める */
   private stepBy(deltaMs: number) {
     this.playback.pause()
     this.playback.seekMs(this.playback.elapsedMilliseconds + deltaMs)
+  }
+
+  /**
+   * 案B用: シークバーの範囲に縛られず「今の時刻」そのものを±deltaMs動かす。stepBy()（案A）は
+   * シークバーの起点(モードに入った時点)〜終端(起点+周期)の中でしかクランプ移動できないため、
+   * 起点より前や終端より先へは進めなかった。こちらはsimAnchorDate自体をずらすことで、
+   * どれだけステップしても際限なく時間移動できるようにする。シークバー上の位置(elapsedMs)は
+   * リセットして常に「新しい今」を起点(0%)から見せる
+   */
+  private stepAnchorBy(deltaMs: number) {
+    this.playback.pause()
+    this.simAnchorDate = new Date(this.simAnchorDate.getTime() + deltaMs)
+    this.playback.reset()
   }
 
   /** 案Aの◀/▶ボタンの表示を、選択中モードの刻み幅に合わせて書き換える */
