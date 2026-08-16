@@ -32,13 +32,11 @@ main.ts
 ```
 
 設定パネル・24hシークバー（`#scene-hud`/`#scene-playback`）は3D+2D・SKYの2シーン共通の1インスタンスで、
-それ以外（メニュー・スケールモデル）では非表示になる。スケールモデルは緯度経度・日時に依存しない
-独立画面（カメラ操作のみ）のため、HUDを使わない。
+それ以外（メニュー・スケールモデル）では非表示になる。
 
-**スケールモデルの単位系**: `scaleModel3d.ts` は月半径=1になるよう、実際の物理値(km)から比率を算出する
-（ハードコードしない）。月半径1のとき、地球半径≒3.67・太陽半径≒400.7・地球〜月距離≒221.3・
-地球〜太陽距離≒86,125。距離比が非常に大きいため、月規模〜太陽規模の行き来はOrbitControlsのズームで行う
-（`minDistance`/`maxDistance`を広く設定）。v1では地球・月の配置は簡易的な固定角度（軌道運動は未実装）。
+**スケールモデルの単位系・座標変換**: `scaleModel3d.ts`は独自の単位系・座標変換（月半径基準の比率、
+公転軌道の角度計算、緯度経度→地表方向など）を持つ。詳細・最新状態は
+`docs/scale-model-3d-handover.md`を参照・遵守すること。
 
 **SKY開始のジェスチャー保持に注意**: iOS Safari は `DeviceOrientationEvent.requestPermission()` を
 ユーザー操作（クリック等）のイベントハンドラから直接呼び出した場合しか許可を出さない。ページ遷移を挟むと
@@ -57,7 +55,8 @@ main.ts
 
 - コミットメッセージは `type: 日本語説明` 形式（例: `feat: 月の満ち欠け表示を追加`）
 - TypeScript strict モード有効
-- 座標変換は `astroCalc.ts` の `positionToXYZ` / `toNorthDeg` に集約する
+- 3D+2D/SKYモードの座標変換は `astroCalc.ts` の `positionToXYZ` / `toNorthDeg` に集約する
+  （スケールモデルは別の座標系。「既知の座標変換」節参照）
 - 星座データは `astroCalc.ts` の定数に追加する
 
 ## ライブラリ
@@ -68,13 +67,12 @@ main.ts
 | `three` | 3D 天球レンダリング |
 | `three/examples/jsm/controls/OrbitControls` | ドラッグ視点操作 |
 
-## 既知の座標変換
+## 既知の座標変換（3D+2D/SKYモード）
 
-- **SunCalc azimuth**: 0=南, π/2=西（ラジアン）
-- **表示用 azimuthDeg**: 0=北, 90=東（度）← `toNorthDeg()` で変換
-- **Three.js 内部**: X=東, Y=上, Z=南 ← `positionToXYZ()` で変換
-- **RA/Dec → Alt/Az**: `raDecToAltAz()` で変換（GMST→LST→時角→高度方位）
-- 星座の星データは J2000.0 のRA/Dec（度）で管理
+SunCalc azimuth・表示用azimuthDeg・Three.js内部座標・RA/Dec→Alt/Az等の変換規約は、
+`astroCalc.ts`の`toNorthDeg()`/`positionToXYZ()`/`raDecToAltAz()`それぞれの定義直上の
+コメントを参照・遵守すること（スケールモデルは別の座標系を持つ。上記参照）。
+星座の星データはJ2000.0のRA/Dec（度）で管理する。
 
 ## 24時間シミュレーション
 
