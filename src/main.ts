@@ -4,8 +4,10 @@ import { Scene3D } from './scene3d'
 import { Compass2D } from './compass2d'
 import { getAstroData, formatTime } from './astroCalc'
 import { ARView } from './ar'
+import { ScaleModel3D, type ScaleModelConfig } from './scaleModel3d'
+import { PlaybackController } from './playbackController'
 
-type SceneName = 'menu' | 'dashboard' | 'sky'
+type SceneName = 'menu' | 'dashboard' | 'sky' | 'scale'
 
 const latInput = document.getElementById('lat') as HTMLInputElement
 const lngInput = document.getElementById('lng') as HTMLInputElement
@@ -36,6 +38,46 @@ zoomSlider.addEventListener('input', () => {
   arView.setFov(parseFloat(zoomSlider.value))
 })
 
+// ---- スケール系モード（既存の「スケール」/ 地球の公転ビューア / 地球の自転ビューア） ----
+// 3つとも同じcanvas・同じDOM（#scene-scale, #scale-playback）を使い回す独立モード。
+// 常に生きたインスタンスが1つだけになるようにする（=IDの衝突や多重描画が構造的に起きない）ため、
+// モードに入る/離れるたびに必ずdispose()してから作り直す（issue #008）
+const canvasScale = document.getElementById('canvas-scale') as HTMLCanvasElement
+let scaleModel: ScaleModel3D | null = null
+
+const SCALE_CONFIG_FULL: ScaleModelConfig = {
+  availableModes: ['day', 'month', 'year'], defaultMode: 'day', deformDefault: false, defaultTarget: 'sun',
+}
+const SCALE_CONFIG_ORBIT: ScaleModelConfig = {
+  // 地球の公転ビューア: 地球の公転・月の動き（満ち欠け）が主役。日モードは出さない。
+  // 注視点は太陽（原点で動かない）。地球を注視点にすると毎フレーム地球へ追従してしまい、
+  // 逆に太陽側が地球の周りを回っているように見えてしまうため。
+  // 水星・金星・火星もここだけ表示する（実験的。フラグ1つで他画面には影響しない）
+  availableModes: ['month', 'year'], defaultMode: 'month', deformDefault: true, defaultTarget: 'sun',
+  showInnerPlanets: true,
+}
+const SCALE_CONFIG_SPIN: ScaleModelConfig = {
+  // 地球の自転ビューア: 地球の自転(昼夜)・月の潮汐固定が主役。年モードは出さない
+  availableModes: ['day', 'month'], defaultMode: 'day', deformDefault: true, defaultTarget: 'earth',
+}
+
+// 画面タイトル(#scale-scene-title)は3つの入口で共有しているDOMなので、入る時に文言を出し分ける。
+// data-i18n属性は付けない（つけるとapplyLang()の一括スイープで固定文言に戻されてしまうため）。
+// 言語切替時にも今のモードの文言で出し直せるよう、キー自体も覚えておく
+const scaleSceneTitle = document.getElementById('scale-scene-title') as HTMLElement
+let scaleSceneTitleKey = 'view-scale'
+
+function enterScaleMode(config: ScaleModelConfig, titleKey: string) {
+  scaleModel?.dispose()
+  scaleModel = new ScaleModel3D(canvasScale, config)
+  scaleSceneTitle.textContent = t(titleKey)
+  scaleSceneTitleKey = titleKey
+  showScene('scale')
+}
+
+const scaleFitBtn = document.getElementById('scale-fit-btn') as HTMLButtonElement
+scaleFitBtn.addEventListener('click', () => scaleModel?.frameAll())
+
 function getSettings() {
   const lat = parseFloat(latInput.value) || 35.6762
   const lng = parseFloat(lngInput.value) || 139.6503
@@ -48,24 +90,39 @@ function setText(id: string, value: string) {
   if (el) el.textContent = value
 }
 
-// ---- シーン切り替え（メニュー / 3D+2D / SKY） ----
+// ---- シーン切り替え（メニュー / 3D+2D / SKY / スケールモデル） ----
 const sceneMenu = document.getElementById('scene-menu') as HTMLElement
 const sceneHud = document.getElementById('scene-hud') as HTMLElement
 const scenePlayback = document.getElementById('scene-playback') as HTMLElement
+const scalePlayback = document.getElementById('scale-playback') as HTMLElement
 const sceneDashboard = document.getElementById('scene-dashboard') as HTMLElement
 const sceneSky = document.getElementById('scene-sky') as HTMLElement
+const sceneScale = document.getElementById('scene-scale') as HTMLElement
 const constToggles = document.getElementById('const-toggles') as HTMLElement
 const backNav = document.getElementById('back-nav') as HTMLElement
 const backToMenuBtn = document.getElementById('back-to-menu-btn') as HTMLButtonElement
 const menuDashboardBtn = document.getElementById('menu-dashboard-btn') as HTMLButtonElement
 const menuSkyBtn = document.getElementById('menu-sky-btn') as HTMLButtonElement
+const menuScaleBtn = document.getElementById('menu-scale-btn') as HTMLButtonElement
+const menuScaleOrbitBtn = document.getElementById('menu-scale-orbit-btn') as HTMLButtonElement
+const menuScaleSpinBtn = document.getElementById('menu-scale-spin-btn') as HTMLButtonElement
 
 function showScene(name: SceneName) {
+  // スケール系モードは「今画面に出ている時だけ生きている」設計（issue #008）。
+  // scale以外へ出ていく瞬間に必ず破棄し、非表示中に描画し続けないようにする
+  if (name !== 'scale' && scaleModel) {
+    scaleModel.dispose()
+    scaleModel = null
+  }
+
+  const showHud = name === 'dashboard' || name === 'sky'
   sceneMenu.style.display = name === 'menu' ? '' : 'none'
-  sceneHud.style.display = name === 'menu' ? 'none' : ''
-  scenePlayback.style.display = name === 'menu' ? 'none' : ''
+  sceneHud.style.display = showHud ? '' : 'none'
+  scenePlayback.style.display = showHud ? '' : 'none'
   sceneDashboard.style.display = name === 'dashboard' ? '' : 'none'
   sceneSky.style.display = name === 'sky' ? '' : 'none'
+  sceneScale.style.display = name === 'scale' ? '' : 'none'
+  scalePlayback.style.display = name === 'scale' ? '' : 'none'
   constToggles.style.display = name === 'dashboard' ? '' : 'none'
   backNav.hidden = name === 'menu'
   if (name !== 'sky') arView.stop()
@@ -73,6 +130,9 @@ function showScene(name: SceneName) {
   if (name === 'dashboard') {
     // 非表示中はサイズ0で解像度が決まらないため、表示直後に再計算する
     requestAnimationFrame(() => scene3d.handleResize())
+  }
+  if (name === 'scale') {
+    requestAnimationFrame(() => scaleModel?.handleResize())
   }
 }
 
@@ -83,16 +143,21 @@ menuSkyBtn.addEventListener('click', () => {
   showScene('sky')
   arView.start(arCanvas)
 })
+menuScaleBtn.addEventListener('click', () => enterScaleMode(SCALE_CONFIG_FULL, 'view-scale'))
+menuScaleOrbitBtn.addEventListener('click', () => enterScaleMode(SCALE_CONFIG_ORBIT, 'view-scale-orbit'))
+menuScaleSpinBtn.addEventListener('click', () => enterScaleMode(SCALE_CONFIG_SPIN, 'view-scale-spin'))
 backToMenuBtn.addEventListener('click', () => showScene('menu'))
 
 // ---- 24時間シミュレーション（状態変数・DOM参照）----
 const langBtn = document.getElementById('lang-btn') as HTMLButtonElement
 const playBtn = document.getElementById('play-btn') as HTMLButtonElement
 const seekbar = document.getElementById('seekbar') as HTMLInputElement
-let isPlaying = false
+const ANIM_DURATION_MS = 24_000 // 24秒で24時間（1秒=1時間）
+const DAY_MS = 24 * 60 * 60 * 1000
+const playback = new PlaybackController(DAY_MS, ANIM_DURATION_MS)
 
 function updateSeekbar(date: Date) {
-  if (isPlaying) return // アニメーション中は applySimMinute 側が管理
+  if (playback.isPlaying) return // アニメーション中はplayback駆動のanimLoop側が管理
   const minutes = date.getHours() * 60 + date.getMinutes()
   seekbar.value = String(minutes)
 }
@@ -177,7 +242,7 @@ update()
 // ---- フルスクリーン ----
 const mainEl = document.querySelector('main') as HTMLElement
 
-document.querySelectorAll<HTMLButtonElement>('.fullscreen-btn').forEach(btn => {
+document.querySelectorAll<HTMLButtonElement>('.fullscreen-btn[data-target]').forEach(btn => {
   btn.addEventListener('click', () => {
     if (!document.fullscreenElement) {
       mainEl.dataset.fs = btn.dataset.target ?? ''
@@ -192,7 +257,7 @@ document.querySelectorAll<HTMLButtonElement>('.fullscreen-btn').forEach(btn => {
 document.addEventListener('fullscreenchange', () => {
   if (!document.fullscreenElement) {
     delete mainEl.dataset.fs
-    document.querySelectorAll<HTMLButtonElement>('.fullscreen-btn').forEach(b => {
+    document.querySelectorAll<HTMLButtonElement>('.fullscreen-btn[data-target]').forEach(b => {
       b.textContent = '⛶'
     })
     scene3d.handleResize()
@@ -234,14 +299,12 @@ langBtn.addEventListener('click', () => {
   langBtn.textContent = next === 'ja' ? 'EN' : 'JP'
   scene3d.refreshTextLabels()
   arView.refreshDirLabels()
+  scaleModel?.refreshTextLabels()
+  scaleSceneTitle.textContent = t(scaleSceneTitleKey) // data-i18n化していないので手動で出し直す
 })
 
 // ---- 24時間シミュレーション ----
-const ANIM_DURATION_MS = 24_000 // 24秒で24時間（1秒=1時間）
-
-let animStartTime: number | null = null
-let animStartMinute = 0
-let animRafId: number | null = null
+// ANIM_DURATION_MS/DAY_MS/playbackは既にファイル冒頭側(状態変数・DOM参照)で定義済み
 
 function getBaseDate(): Date {
   const d = new Date(datetimeInput.value)
@@ -262,41 +325,22 @@ function applySimMinute(minute: number) {
 }
 
 function stopAnim() {
-  isPlaying = false
+  playback.pause()
   playBtn.textContent = '▶'
-  if (animRafId !== null) {
-    cancelAnimationFrame(animRafId)
-    animRafId = null
-  }
-}
-
-function animStep(timestamp: number) {
-  if (!isPlaying) return
-  if (animStartTime === null) animStartTime = timestamp
-  const elapsed = timestamp - animStartTime
-  const minute = animStartMinute + (elapsed / ANIM_DURATION_MS) * 1440
-  if (minute >= 1440) {
-    applySimMinute(1439)
-    stopAnim()
-    return
-  }
-  applySimMinute(minute)
-  animRafId = requestAnimationFrame(animStep)
 }
 
 function startAnim() {
-  animStartMinute = parseInt(seekbar.value) || 0
-  if (animStartMinute >= 1439) animStartMinute = 0
-  animStartTime = null
-  isPlaying = true
+  // 既存動作を踏襲: シークバーが終端付近(1439分=23:59)にある状態で再生すると先頭に戻る
+  const startMinute = parseInt(seekbar.value) || 0
+  playback.seekMs((startMinute >= 1439 ? 0 : startMinute) * 60_000)
+  playback.play()
   playBtn.textContent = '⏸'
   realtimeCheck.checked = false
   stopRealtime()
-  animRafId = requestAnimationFrame(animStep)
 }
 
 playBtn.addEventListener('click', () => {
-  if (isPlaying) stopAnim()
+  if (playback.isPlaying) stopAnim()
   else startAnim()
 })
 
@@ -306,3 +350,16 @@ seekbar.addEventListener('input', () => {
   stopRealtime()
   applySimMinute(parseInt(seekbar.value))
 })
+
+// 継続的なrAFループ。playback.tick()は再生中でなければ何もしないため、常時回しっぱなしでよい
+let lastAnimTime: number | null = null
+function animLoop(timestamp: number) {
+  requestAnimationFrame(animLoop)
+  const dt = lastAnimTime === null ? 0 : (timestamp - lastAnimTime) / 1000
+  lastAnimTime = timestamp
+  if (!playback.isPlaying) return
+  playback.tick(dt)
+  applySimMinute(playback.elapsedMilliseconds / 60_000)
+  if (!playback.isPlaying) playBtn.textContent = '▶' // 周期終端に達して自動停止した場合
+}
+requestAnimationFrame(animLoop)

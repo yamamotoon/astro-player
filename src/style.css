@@ -255,6 +255,12 @@ input[type="number"] {
   justify-content: space-between;
 }
 
+.view-title-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .fullscreen-btn {
   background: none;
   border: 1px solid #2a2a4a;
@@ -293,7 +299,8 @@ main:fullscreen .controls {
 
 /* フルスクリーン時はviews/sky-viewを拡張 */
 main:fullscreen .views,
-main:fullscreen .sky-view {
+main:fullscreen .sky-view,
+main:fullscreen .scale-view {
   flex: 1;
   overflow: hidden;
 }
@@ -344,6 +351,73 @@ main[data-fs="view2d"]:fullscreen .info-panel {
   display: block;
   width: 100%;
   height: 100%;
+}
+
+.scale-view {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  position: relative;
+}
+
+.scale-canvas-wrap {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+}
+
+#canvas-scale {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.scale-debug-hud {
+  position: absolute;
+  left: 8px;
+  bottom: 8px;
+  margin: 0;
+  padding: 6px 8px;
+  background: rgba(0, 0, 20, 0.6);
+  color: #9fd0ff;
+  font-family: 'Consolas', 'SFMono-Regular', monospace;
+  font-size: 0.68rem;
+  line-height: 1.4;
+  border-radius: 4px;
+  pointer-events: none;
+  white-space: pre;
+}
+
+/* 現在シミュレーションしている日時。画面上部中央に常時、大きめに表示する
+   （下部シークバー横の小さいラベルだけでは「今どの時点の天体か」が分かりにくいため） */
+.scale-date-hud {
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 5px 14px;
+  background: rgba(0, 0, 20, 0.55);
+  color: #d8e8ff;
+  font-family: 'Consolas', 'SFMono-Regular', monospace;
+  font-size: 0.9rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  border-radius: 6px;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+/* カメラの向きインジケーター: 固定サイズ・固定位置。メインのズームには一切連動しない */
+.scale-angle-gizmo {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  width: 96px;
+  height: 96px;
+  background: rgba(0, 0, 20, 0.45);
+  border-radius: 6px;
+  pointer-events: none;
 }
 
 .view-2d {
@@ -454,6 +528,87 @@ main[data-fs="view2d"]:fullscreen .info-panel {
   font-size: 0.64rem;
   color: #506080;
   user-select: none;
+}
+
+/* ---- スケールモデル専用の時間バー（issue #004） ---- */
+.scale-mode-toggle {
+  display: flex;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.scale-mode-btn {
+  background: transparent;
+  border: 1px solid #2a2a4a;
+  color: #7080a0;
+  font-size: 0.7rem;
+  padding: 3px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.scale-mode-btn:hover {
+  border-color: #3a5a9e;
+}
+
+.scale-mode-btn.active {
+  background: #1e3a6e;
+  border-color: #3a5a9e;
+  color: #a0c0ff;
+}
+
+.scale-seekbar-label {
+  font-size: 0.64rem;
+  color: #506080;
+  white-space: nowrap;
+  padding: 0 2px;
+}
+
+/* ---- スケールモデルの時間バー: モード切替・ステップ再生・シークバーの3段構成（issue-009） ---- */
+#scale-playback {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+}
+
+.scale-playback-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.scale-playback-row:last-of-type {
+  justify-content: center;
+}
+
+.scale-step-group {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+/* display:flexの指定がUA標準の[hidden]{display:none}をカスケードで上書きしてしまい、
+   hidden属性だけではA/B切り替えが効かなくなるため明示的に上書きする */
+.scale-step-group[hidden] {
+  display: none;
+}
+
+.step-btn {
+  background: transparent;
+  border: 1px solid #2a2a4a;
+  color: #7080a0;
+  font-size: 0.66rem;
+  padding: 5px 9px;
+  border-radius: 6px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.step-btn:hover {
+  border-color: #3a5a9e;
+  color: #a0c0ff;
 }
 
 /* AR パネル */
@@ -591,6 +746,22 @@ main[data-fs="view2d"]:fullscreen .info-panel {
     font-size: 0.9rem;
   }
 
+  .scale-mode-btn {
+    padding: 6px 10px;
+    font-size: 0.78rem;
+  }
+
+  /* ステップ再生ボタン: 横幅が厳しいので詰める。矢印の数(◀/◀◀/◀◀◀)で刻み幅を表すため
+     文字より場所を取らない */
+  .step-btn {
+    padding: 6px 8px;
+    font-size: 0.72rem;
+  }
+
+  .scale-step-group {
+    gap: 3px;
+  }
+
   /* views: 縦スクロール */
   .views {
     flex-direction: column;
@@ -649,12 +820,11 @@ main[data-fs="view2d"]:fullscreen .info-panel {
 
 /* ---- モバイル横向き (landscape on phone: 幅>600px かつ 高さ<=500px) ---- */
 @media (orientation: landscape) and (max-height: 500px) {
-  body {
-    height: auto;
-    min-height: 100dvh;
-    overflow-y: auto;
-    overflow-x: hidden;
-  }
+  /* bodyの高さは基準(height:100dvh; overflow:hidden)のまま変えない。auto+overflow-y:autoに
+     緩めると、main{flex:1; overflow:hidden}によるviewport内への収まりが効かなくなり、
+     はみ出た分がスクロールで隠れてしまう（＝スケールモデル/SKYのような全画面3D/AR表示では
+     スクロールという概念自体が成立せず、実質「操作できないボタンが画面外に消える」不具合になる）。
+     ここでは各シーン側のレイアウトを縮めて確実にviewport内へ収める方針にする */
 
   header {
     display: flex;
@@ -751,5 +921,38 @@ main[data-fs="view2d"]:fullscreen .info-panel {
   #info-table td {
     padding: 4px 8px;
     font-size: 0.78rem;
+  }
+
+  /* SKY: ズームスライダーが縦180pxのままだと高さ不足の端末でheader/ar-hudと重なる/はみ出るため縮める */
+  .zoom-slider-wrap {
+    height: 120px;
+  }
+
+  .zoom-slider {
+    width: 120px;
+  }
+
+  /* スケールモデル: 縦向きは3段（モード切替／ステップ+再生／シークバー）だが、横向きは
+     縦の余裕がない代わりに横は十分広い。ボタンを小さくして押しにくくするのではなく、
+     .scale-playback-row(2つ)をdisplay:contentsにして中身を#scale-playback自身の
+     flexアイテムとして直接並べ、幅が許す限り1行にまとめる（入りきらなければ自然に折り返す
+     だけなので、極端に狭い端末でも崩れはしない）。シークバーは常に単独の行にする */
+  #scale-playback {
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: center;
+    row-gap: 2px;
+    column-gap: 10px;
+    padding: 3px 12px;
+    padding-bottom: max(3px, env(safe-area-inset-bottom));
+  }
+
+  .scale-playback-row {
+    display: contents;
+  }
+
+  .seekbar-wrap {
+    flex-basis: 100%;
   }
 }
