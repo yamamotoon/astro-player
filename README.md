@@ -1,4 +1,4 @@
-# StarCanvas Hoshizora — 星空キャンバス
+# astro-player — 天空プレイヤー
 
 太陽・月の位置をリアルタイムでシミュレートする Web アプリケーション。  
 A web application that simulates the real-time positions of the sun, moon, and constellations.
@@ -44,8 +44,8 @@ A web application that simulates the real-time positions of the sun, moon, and c
 ## セットアップ / Getting Started
 
 ```bash
-git clone https://github.com/shinichiroy/StarCanvas-Hoshizora.git
-cd StarCanvas-Hoshizora
+git clone https://github.com/shinichiroy/astro-player.git
+cd astro-player
 npm install
 npm run dev
 ```
@@ -65,7 +65,7 @@ npm run preview  # ビルド結果をローカルで確認 / Preview build local
 ## プロジェクト構成 / Project Structure
 
 ```
-StarCanvas-Hoshizora/
+astro-player/
 ├── index.html              # エントリーポイント
 ├── package.json
 ├── tsconfig.json

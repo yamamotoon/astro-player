@@ -2,8 +2,8 @@ export type Lang = 'ja' | 'en'
 
 const TRANSLATIONS: Record<Lang, Record<string, string>> = {
   ja: {
-    'page-title':          'StarCanvas Hoshizora - 太陽・月位置シミュレーター',
-    'h1':                  'StarCanvas Hoshizora \u2014 太陽・月位置シミュレーター',
+    'page-title':          '天空プレイヤー - 太陽・月位置シミュレーター',
+    'h1':                  '天空プレイヤー \u2014 太陽・月位置シミュレーター',
     'toggle-aria':         '設定を開閉',
     'settings-open':       '設定 ▲',
     'settings-close':      '設定 ▼',
@@ -66,8 +66,8 @@ const TRANSLATIONS: Record<Lang, Record<string, string>> = {
     'label-mars':          '火星',
   },
   en: {
-    'page-title':          'StarCanvas Hoshizora - Sun & Moon Simulator',
-    'h1':                  'StarCanvas Hoshizora \u2014 Sun & Moon Simulator',
+    'page-title':          'astro-player - Sun & Moon Simulator',
+    'h1':                  'astro-player \u2014 Sun & Moon Simulator',
     'toggle-aria':         'Toggle settings',
     'settings-open':       'Settings ▲',
     'settings-close':      'Settings ▼',

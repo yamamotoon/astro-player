@@ -3,12 +3,12 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <title>StarCanvas Hoshizora - 太陽・月位置シミュレーター</title>
+  <title>天空プレイヤー - 太陽・月位置シミュレーター</title>
   <link rel="stylesheet" href="/src/style.css">
 </head>
 <body>
   <header>
-    <h1 data-i18n="h1">StarCanvas Hoshizora &mdash; 太陽・月位置シミュレーター</h1>
+    <h1 data-i18n="h1">天空プレイヤー &mdash; 太陽・月位置シミュレーター</h1>
     <div class="header-actions">
       <button id="lang-btn" class="lang-btn">EN</button>
       <button id="toggle-controls" class="toggle-controls" aria-expanded="true" aria-label="設定を開閉" data-i18n-aria-label="toggle-aria">設定 ▲</button>
@@ -22,21 +22,6 @@
   <main>
     <!-- メニュー シーン -->
     <section id="scene-menu" class="menu-main">
-      <button id="menu-dashboard-btn" class="menu-card">
-        <span class="menu-card-icon">🪐</span>
-        <span class="menu-card-title" data-i18n="nav-dashboard">3D+2D</span>
-        <span class="menu-card-desc" data-i18n="menu-dashboard-desc">3D天球・2D方位図・天体情報</span>
-      </button>
-      <button id="menu-sky-btn" class="menu-card">
-        <span class="menu-card-icon">🔭</span>
-        <span class="menu-card-title" data-i18n="nav-sky">SKY</span>
-        <span class="menu-card-desc" data-i18n="menu-sky-desc">ジャイロで天球を見るARビュー</span>
-      </button>
-      <button id="menu-scale-btn" class="menu-card">
-        <span class="menu-card-icon">🌍</span>
-        <span class="menu-card-title" data-i18n="nav-scale">スケール</span>
-        <span class="menu-card-desc" data-i18n="menu-scale-desc">地球・月・太陽の距離と大きさを正確に再現</span>
-      </button>
       <button id="menu-scale-orbit-btn" class="menu-card">
         <span class="menu-card-icon">☀️</span>
         <span class="menu-card-title" data-i18n="nav-scale-orbit">地球の公転</span>
@@ -46,6 +31,21 @@
         <span class="menu-card-icon">🌓</span>
         <span class="menu-card-title" data-i18n="nav-scale-spin">地球の自転</span>
         <span class="menu-card-desc" data-i18n="menu-scale-spin-desc">地球の自転（昼と夜）と、月がいつも同じ面を向けている様子を見る</span>
+      </button>
+      <button id="menu-scale-btn" class="menu-card">
+        <span class="menu-card-icon">🌍</span>
+        <span class="menu-card-title" data-i18n="nav-scale">スケール</span>
+        <span class="menu-card-desc" data-i18n="menu-scale-desc">地球・月・太陽の距離と大きさを正確に再現</span>
+      </button>
+      <button id="menu-dashboard-btn" class="menu-card">
+        <span class="menu-card-icon">🪐</span>
+        <span class="menu-card-title" data-i18n="nav-dashboard">3D+2D</span>
+        <span class="menu-card-desc" data-i18n="menu-dashboard-desc">3D天球・2D方位図・天体情報</span>
+      </button>
+      <button id="menu-sky-btn" class="menu-card">
+        <span class="menu-card-icon">🔭</span>
+        <span class="menu-card-title" data-i18n="nav-sky">SKY</span>
+        <span class="menu-card-desc" data-i18n="menu-sky-desc">ジャイロで天球を見るARビュー</span>
       </button>
     </section>
 
