@@ -1,98 +1,19 @@
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
-import SunCalc from 'suncalc'
 import { t } from './i18n'
 import earthTextureUrl from './assets/earth-texture.png'
 import moonTextureUrl from './assets/moon-texture.png'
 import { PlaybackController } from './playbackController'
-import { DAY_MS, dayOfYearFraction, orbitalAngleFromEpoch, subsolarLonRad, localDirForLon, localDirForLatLon } from './orbitalMath'
-
-// ---- 実際の物理値(km)。月半径=1になるよう、常にこれらから比率を算出する ----
-const MOON_RADIUS_KM = 1737
-const EARTH_RADIUS_KM = 6371
-const SUN_RADIUS_KM = 696000
-const EARTH_MOON_DIST_KM = 384400
-const EARTH_SUN_DIST_KM = 149600000
-
-const MOON_R = MOON_RADIUS_KM / MOON_RADIUS_KM
-const EARTH_R = EARTH_RADIUS_KM / MOON_RADIUS_KM
-const SUN_R = SUN_RADIUS_KM / MOON_RADIUS_KM
-const EARTH_MOON_DIST = EARTH_MOON_DIST_KM / MOON_RADIUS_KM
-const EARTH_SUN_DIST = EARTH_SUN_DIST_KM / MOON_RADIUS_KM
-
-// ---- 内惑星（水星・金星・火星）。地球の公転ビューアのみでON/OFFする(ScaleModelConfig.
-// showInnerPlanets)実験的な追加。衛星を持たない前提（火星の衛星フォボス/ダイモスは省略）で、
-// 「系全体」ボタン(REAL_SATELLITE_ORBIT_RADIUS等)にもエントリを作らない ----
-const MERCURY_RADIUS_KM = 2439.7
-const VENUS_RADIUS_KM = 6051.8
-const MARS_RADIUS_KM = 3389.5
-const MERCURY_SUN_DIST_KM = 57_900_000
-const VENUS_SUN_DIST_KM = 108_200_000
-const MARS_SUN_DIST_KM = 227_900_000
-// 公転周期(日)。地球のみdayOfYearFraction()（暦年基準、周期≒365.25日限定の簡略計算）を使うため、
-// 他の惑星はこの日数を使う専用の角度計算(orbitalAngleFromEpoch())を別途用意する
-const MERCURY_ORBIT_DAYS = 87.969
-const VENUS_ORBIT_DAYS = 224.701
-const MARS_ORBIT_DAYS = 686.980
-
-const MERCURY_R = MERCURY_RADIUS_KM / MOON_RADIUS_KM
-const VENUS_R = VENUS_RADIUS_KM / MOON_RADIUS_KM
-const MARS_R = MARS_RADIUS_KM / MOON_RADIUS_KM
-const MERCURY_SUN_DIST = MERCURY_SUN_DIST_KM / MOON_RADIUS_KM
-const VENUS_SUN_DIST = VENUS_SUN_DIST_KM / MOON_RADIUS_KM
-const MARS_SUN_DIST = MARS_SUN_DIST_KM / MOON_RADIUS_KM
-
-// ---- デフォルメモード（issue #007。実験的）----
-// 実際の相対サイズ比(約109:1)のままだと「認識できる大きさ」と「重ならない」が両立しないため、
-// デフォルメ時は太陽・地球・月を全て同じ半径にする。距離は「表面間のギャップ」から逆算することで
-// (中心間距離 = 半径×2 + ギャップ)、ギャップ>0である限り構造的に重なりようがない。
-// 距離の比率(太陽〜地球 / 地球〜月)は、月の満ち欠け（太陽→地球方向を共用するDirectionalLightの
-// 近似）にわずかな誤差を生むが、学習用途では無視できるレベルのため「見やすさ」を優先して決める
-// （詳細はdocs/issue-007-scale-model-deform-mode.md参照）
-const DEFORM_BODY_R = 10
-const DEFORM_EARTH_MOON_GAP = 3 * DEFORM_BODY_R
-const DEFORM_SUN_EARTH_GAP = 8 * DEFORM_BODY_R
-const DEFORM_EARTH_MOON_DIST = 2 * DEFORM_BODY_R + DEFORM_EARTH_MOON_GAP
-const DEFORM_SUN_EARTH_DIST = 2 * DEFORM_BODY_R + DEFORM_SUN_EARTH_GAP
-
-// 内惑星のデフォルメ距離。既存のDEFORM_SUN_EARTH_DIST(=100)は変えない(既存3画面の見た目を
-// 変えないため)。水星・金星はその内側、火星は外側に、隣り合うリングの中心間距離が
-// 常に2*DEFORM_BODY_R(=20)以上空くように配置し、太陽・惑星同士がリング半径の差だけでは
-// 重ならないようにする。ただし月は地球を中心に別途EARTH_MOON_DISTぶん動くため、月と
-// 水星/金星/火星が特定の角度でごく稀に接近する可能性はこの計算だけでは排除できない
-// （3天体(太陽・地球・月)だけを対象にしたissue #007の重なり回避保証は、6天体には及ばない
-// 実験的な拡張であることの注記）
-const DEFORM_MERCURY_SUN_DIST = 40
-const DEFORM_VENUS_SUN_DIST = 70
-const DEFORM_MARS_SUN_DIST = 170
-
-// 太陽を原点（この系で唯一動かない基準点）、Y=公転面(黄道面=XZ平面)の法線。
-// 地球・月の位置は円軌道で簡略化した公転運動により、毎フレームcomputeOrbitalPositions()が
-// この2つのVector3を書き換える（他の箇所はこのオブジェクトへの参照を持ち続けるだけでよい）
-const SUN_POS = new THREE.Vector3(0, 0, 0)
-const EARTH_POS = new THREE.Vector3(EARTH_SUN_DIST, 0, 0)
-const MOON_POS = new THREE.Vector3(EARTH_SUN_DIST, 0, EARTH_MOON_DIST)
-const MERCURY_POS = new THREE.Vector3(MERCURY_SUN_DIST, 0, 0)
-const VENUS_POS = new THREE.Vector3(VENUS_SUN_DIST, 0, 0)
-const MARS_POS = new THREE.Vector3(MARS_SUN_DIST, 0, 0)
-
-// 地球の自転軸: 公転面の法線(Y)に対して実際の地軸傾斜23.44度だけ傾ける。
-// 符号は-EARTH_AXIAL_TILT_DEGにする(+だと北半球の夏至(6月)に北極が反太陽側を向いてしまい、
-// 実際の季節と逆になるバグがあった。dayOfYearFraction()の公転角度の基準と、この傾きの
-// 向きの組み合わせで初めて決まるものなので、数値検証で確認して修正した)
-const EARTH_AXIAL_TILT_DEG = 23.44
-const EARTH_AXIS = new THREE.Vector3(0, 1, 0)
-  .applyAxisAngle(new THREE.Vector3(0, 0, 1), THREE.MathUtils.degToRad(-EARTH_AXIAL_TILT_DEG))
-
-// 月の軌道面: 実際は地球の公転面(黄道面)に対して約5.14度傾いている。実際の昇交点は約18.6年周期で
-// 歳差運動するが、簡略化のため固定軸(X軸)まわりの傾きとして扱う（このアプリの円軌道簡略化と同じ方針）
-const MOON_ORBIT_INCLINATION_DEG = 5.14
-const MOON_ORBIT_TILT_QUAT = new THREE.Quaternion()
-  .setFromAxisAngle(new THREE.Vector3(1, 0, 0), THREE.MathUtils.degToRad(MOON_ORBIT_INCLINATION_DEG))
-
-// 月の自転軸。実際の自転軸は公転面に対して約1.5度しか傾いていないため、EARTH_AXISと違い
-// 傾きは無視してY軸のまま扱う（潮汐固定の見た目には影響しない誤差）
-const MOON_SPIN_AXIS = new THREE.Vector3(0, 1, 0)
+import {
+  DAY_MS, dayOfYearFraction, orbitalAngleFromEpoch, subsolarLonRad, localDirForLon, localDirForLatLon,
+  computeOrbitalPositions, type InnerPlanetKey, INNER_PLANET_KEYS,
+  MOON_R, EARTH_R, SUN_R, MERCURY_R, VENUS_R, MARS_R,
+  EARTH_MOON_DIST, EARTH_SUN_DIST,
+  DEFORM_BODY_R, DEFORM_EARTH_MOON_DIST, DEFORM_SUN_EARTH_DIST,
+  REAL_INNER_PLANET_DIST, DEFORM_INNER_PLANET_DIST, INNER_PLANET_ORBIT_DAYS,
+  SUN_POS, EARTH_POS, MOON_POS, INNER_PLANET_POS,
+  EARTH_AXIS, MOON_SPIN_AXIS, MOON_ORBIT_TILT_QUAT,
+} from './orbitalMath'
 
 // 地球儀上の位置マーカー（東京）。アプリの緯度経度入力欄の既定値(index.html #lat/#lng)と同じ
 const TOKYO_LAT_DEG = 35.6762
@@ -102,9 +23,7 @@ const TOKYO_LON_DEG = 139.6503
 const MARKER_HEIGHT = 0.5
 const MARKER_RADIUS = 0.15
 
-type BodyKey = 'sun' | 'mercury' | 'venus' | 'earth' | 'mars' | 'moon'
-// 内惑星3つ(showInnerPlanets=trueの時だけ使う)。太陽に近い順（配置・ループの基準順）
-const INNER_PLANET_KEYS = ['mercury', 'venus', 'mars'] as const
+type BodyKey = 'sun' | InnerPlanetKey | 'earth' | 'moon'
 // 表示/非表示に関わらず全天体。scale適用など「見えているかは関係なく全部そろえておきたい」処理で使う
 // （表示対象を絞るactiveBodyKeys()とは目的が違うので取り違えないよう別名にしている）
 const ALL_BODY_KEYS: BodyKey[] = ['sun', 'mercury', 'venus', 'earth', 'mars', 'moon']
@@ -285,23 +204,11 @@ export class ScaleModel3D {
   private leaderByKey!: Record<BodyKey, THREE.Line>
 
   // 内惑星（水星・金星・火星）専用のメッシュ・軌道円ルックアップ。showInnerPlanets=falseの時は
-  // 常に3つとも存在はするが.visible=falseで非表示にする（activeBodyKeys()もこのキーを含めない）
+  // 常に3つとも存在はするが.visible=falseで非表示にする（activeBodyKeys()もこのキーを含めない）。
+  // REAL_INNER_PLANET_DIST/DEFORM_INNER_PLANET_DIST/INNER_PLANET_ORBIT_DAYS/INNER_PLANET_POSは
+  // 物理量なのでorbitalMath.tsが持つ（このクラスはimportして使うだけ）
   private innerPlanetMeshByKey: Partial<Record<BodyKey, THREE.Mesh>> = {}
   private innerPlanetOrbitLineByKey: Partial<Record<BodyKey, THREE.LineLoop>> = {}
-  private static readonly REAL_INNER_PLANET_DIST: Record<'mercury' | 'venus' | 'mars', number> = {
-    mercury: MERCURY_SUN_DIST, venus: VENUS_SUN_DIST, mars: MARS_SUN_DIST,
-  }
-  private static readonly DEFORM_INNER_PLANET_DIST: Record<'mercury' | 'venus' | 'mars', number> = {
-    mercury: DEFORM_MERCURY_SUN_DIST, venus: DEFORM_VENUS_SUN_DIST, mars: DEFORM_MARS_SUN_DIST,
-  }
-  private static readonly INNER_PLANET_ORBIT_DAYS: Record<'mercury' | 'venus' | 'mars', number> = {
-    mercury: MERCURY_ORBIT_DAYS, venus: VENUS_ORBIT_DAYS, mars: MARS_ORBIT_DAYS,
-  }
-  // モジュール直下のMERCURY_POS等（EARTH_POS/MOON_POSと同じく、computeOrbitalPositions()が
-  // 毎フレーム書き換える共有Vector3）をキーで引けるようにする
-  private static readonly INNER_PLANET_POS: Record<'mercury' | 'venus' | 'mars', THREE.Vector3> = {
-    mercury: MERCURY_POS, venus: VENUS_POS, mars: MARS_POS,
-  }
 
   // ---- 時間連動（自転・公転・シークバー） ----
   // シークバーの起点(0%)は常に「モードに入った時点の実時刻」。そこから未来方向にのみ進む
@@ -336,7 +243,7 @@ export class ScaleModel3D {
 
     // カメラの初期位置がEARTH_POSを参照するため、メッシュ等を作る前に一度、実際の現在時刻
     // (simAnchorDate、フィールド初期化子で既に設定済み)に基づく公転位置を計算しておく
-    this.computeOrbitalPositions(this.currentSimDate())
+    computeOrbitalPositions(this.currentSimDate(), this.deformMode)
 
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true })
     this.renderer.setPixelRatio(window.devicePixelRatio)
@@ -458,23 +365,20 @@ export class ScaleModel3D {
       venus: { radius: VENUS_R, color: 0xe8d4a0 },
       mars: { radius: MARS_R, color: 0xc1440e },
     }
-    const innerPlanetPos: Record<typeof INNER_PLANET_KEYS[number], THREE.Vector3> = {
-      mercury: MERCURY_POS, venus: VENUS_POS, mars: MARS_POS,
-    }
     for (const key of INNER_PLANET_KEYS) {
       const { radius, color } = innerPlanetVisual[key]
       const mesh = new THREE.Mesh(
         new THREE.SphereGeometry(radius, 24, 18),
         new THREE.MeshLambertMaterial({ color })
       )
-      mesh.position.copy(innerPlanetPos[key])
+      mesh.position.copy(INNER_PLANET_POS[key])
       mesh.userData.radius = radius
       mesh.visible = this.showInnerPlanets
       this.scene.add(mesh)
       this.innerPlanetMeshByKey[key] = mesh
 
       const orbitLine = this.makeOrbitLine(0x6a86b8)
-      orbitLine.scale.setScalar(this.deformMode ? ScaleModel3D.DEFORM_INNER_PLANET_DIST[key] : ScaleModel3D.REAL_INNER_PLANET_DIST[key])
+      orbitLine.scale.setScalar(this.deformMode ? DEFORM_INNER_PLANET_DIST[key] : REAL_INNER_PLANET_DIST[key])
       orbitLine.visible = this.showInnerPlanets
       this.scene.add(orbitLine)
       this.innerPlanetOrbitLineByKey[key] = orbitLine
@@ -547,7 +451,7 @@ export class ScaleModel3D {
     }
     this.posByKey = {
       sun: SUN_POS, earth: EARTH_POS, moon: MOON_POS,
-      mercury: MERCURY_POS, venus: VENUS_POS, mars: MARS_POS,
+      mercury: INNER_PLANET_POS.mercury, venus: INNER_PLANET_POS.venus, mars: INNER_PLANET_POS.mars,
     }
     this.radiusByKey = {
       sun: SUN_R, earth: EARTH_R, moon: MOON_R,
@@ -861,45 +765,6 @@ export class ScaleModel3D {
     return new Date(this.simAnchorDate.getTime() + this.playback.elapsedMilliseconds)
   }
 
-  /**
-   * 円軌道で簡略化した公転運動により、太陽・地球・月の位置関係からEARTH_POS/MOON_POSを書き換える
-   * （メッシュ等のシーングラフには触れない。syncSceneToOrbitalState()が別途反映する）。
-   * 地球の公転角度は年内の経過日数から、月の公転角度は実際の月相(SunCalcの実測値。新月=0で
-   * 地球と太陽の間、満月=0.5で太陽の反対側)を基準にしている
-   */
-  private computeOrbitalPositions(date: Date): number {
-    // デフォルメモード（issue #007）中は、実際の距離ではなくDEFORM_*_DISTを使う。角度の計算式は
-    // 変えないため、月の公転角度(=満ち欠けの形)はどちらのモードでも常に正確なまま
-    const sunEarthDist = this.deformMode ? DEFORM_SUN_EARTH_DIST : EARTH_SUN_DIST
-    const earthMoonDist = this.deformMode ? DEFORM_EARTH_MOON_DIST : EARTH_MOON_DIST
-
-    // Z成分の符号を反転させて(cosθ, -sinθ)にすることで、+Y(北)から見て反時計回り
-    // （実際の公転方向。地球の自転と同じ向き）になるようにしている。単純な(cosθ, sinθ)は
-    // +Y側から見て時計回りになってしまうため(issue-009で発覚したバグの修正)
-    const earthAngle = dayOfYearFraction(date) * Math.PI * 2
-    EARTH_POS.set(Math.cos(earthAngle) * sunEarthDist, 0, -Math.sin(earthAngle) * sunEarthDist)
-
-    const moonPhase = SunCalc.getMoonIllumination(date).phase // 0(新月)〜1(次の新月)
-    const sunwardAngle = earthAngle + Math.PI // 地球から見て太陽がある方向
-    const moonAngle = sunwardAngle + moonPhase * Math.PI * 2
-    // 地球から見た月の方向(moonAngle)は地球の公転面(XZ平面)を基準に定義したうえで、
-    // その平面自体をMOON_ORBIT_TILT_QUATで傾けることで、月の軌道面の傾きを再現する。
-    // EARTH_POSと同じく(cosθ, -sinθ)の符号にして、月の公転も北から見て反時計回りにする
-    const moonOffset = new THREE.Vector3(Math.cos(moonAngle) * earthMoonDist, 0, -Math.sin(moonAngle) * earthMoonDist)
-      .applyQuaternion(MOON_ORBIT_TILT_QUAT)
-    MOON_POS.set(EARTH_POS.x + moonOffset.x, moonOffset.y, EARTH_POS.z + moonOffset.z)
-
-    // 内惑星（showInnerPlanets=falseでも非表示なだけで位置自体は常に計算しておく。
-    // 表示切替した瞬間にも正しい位置になっている必要があるため）
-    for (const key of INNER_PLANET_KEYS) {
-      const dist = this.deformMode
-        ? ScaleModel3D.DEFORM_INNER_PLANET_DIST[key] : ScaleModel3D.REAL_INNER_PLANET_DIST[key]
-      const angle = orbitalAngleFromEpoch(date, ScaleModel3D.INNER_PLANET_ORBIT_DAYS[key])
-      ScaleModel3D.INNER_PLANET_POS[key].set(Math.cos(angle) * dist, 0, -Math.sin(angle) * dist)
-    }
-    return earthAngle
-  }
-
   // 自転角度の基準（EARTH_AXIS周りの角度を測るための、軸に直交する2つの基準ベクトル）。
   // EARTH_AXISはZ成分を持たない（Yを Z軸周りに傾けているだけ）ため(0,0,1)と直交する
   private static readonly EARTH_AXIS_REF1 = new THREE.Vector3(0, 0, 1)
@@ -925,9 +790,9 @@ export class ScaleModel3D {
     // 内惑星: 位置とその軌道円の半径を毎フレーム反映する（showInnerPlanets=falseでも非表示なだけで
     // 位置計算・同期自体は続ける。表示切替した瞬間に正しい位置になっている必要があるため）
     for (const key of INNER_PLANET_KEYS) {
-      this.innerPlanetMeshByKey[key]!.position.copy(ScaleModel3D.INNER_PLANET_POS[key])
+      this.innerPlanetMeshByKey[key]!.position.copy(INNER_PLANET_POS[key])
       this.innerPlanetOrbitLineByKey[key]!.scale.setScalar(
-        this.deformMode ? ScaleModel3D.DEFORM_INNER_PLANET_DIST[key] : ScaleModel3D.REAL_INNER_PLANET_DIST[key]
+        this.deformMode ? DEFORM_INNER_PLANET_DIST[key] : REAL_INNER_PLANET_DIST[key]
       )
     }
 
@@ -1651,7 +1516,7 @@ export class ScaleModel3D {
       const dt = lastTime === null ? 0 : (time - lastTime) / 1000
       lastTime = time
       this.playback.tick(dt)
-      const earthOrbitAngle = this.computeOrbitalPositions(this.currentSimDate())
+      const earthOrbitAngle = computeOrbitalPositions(this.currentSimDate(), this.deformMode)
       this.syncSceneToOrbitalState(earthOrbitAngle)
       this.updatePlaybackUI()
       this.updateCameraTracking()
