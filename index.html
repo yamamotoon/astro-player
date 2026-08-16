@@ -166,16 +166,10 @@
           <button id="scale-mode-month" class="scale-mode-btn" data-mode="month" data-i18n="scale-mode-month">月</button>
           <button id="scale-mode-year" class="scale-mode-btn" data-mode="year" data-i18n="scale-mode-year">年</button>
         </div>
-        <!-- ステップ再生のA/B比較用（一時的。判断がついたら片方削除する） -->
-        <button id="scale-step-ab-toggle" class="scale-mode-btn" title="ステップUIのA/B比較切替（一時的）">案A</button>
       </div>
       <div class="scale-playback-row">
-        <!-- 案A: モード連動ステップ（◀/▶1個ずつ。刻み幅は選択中のモードに従う） -->
-        <div id="scale-step-back-a" class="scale-step-group">
-          <button id="scale-step-a-back" class="step-btn"></button>
-        </div>
-        <!-- 案B: 常時多段ステップ（時/日/月を常に全部表示） -->
-        <div id="scale-step-back-b" class="scale-step-group" hidden>
+        <!-- ステップ再生（issue-009）: 時/日/月の3段を常時表示し、シーク範囲に縛られず時刻そのものを移動する -->
+        <div id="scale-step-back-b" class="scale-step-group">
           <button class="step-btn" data-unit="month" data-dir="-1" title="1か月戻す">◀◀◀</button>
           <button class="step-btn" data-unit="day" data-dir="-1" title="1日戻す">◀◀</button>
           <button class="step-btn" data-unit="hour" data-dir="-1" title="1時間戻す">◀</button>
@@ -183,10 +177,7 @@
 
         <button id="scale-play-btn" class="play-btn" title="再生/停止" data-i18n-title="play-title">▶</button>
 
-        <div id="scale-step-fwd-a" class="scale-step-group">
-          <button id="scale-step-a-fwd" class="step-btn"></button>
-        </div>
-        <div id="scale-step-fwd-b" class="scale-step-group" hidden>
+        <div id="scale-step-fwd-b" class="scale-step-group">
           <button class="step-btn" data-unit="hour" data-dir="1" title="1時間進める">▶</button>
           <button class="step-btn" data-unit="day" data-dir="1" title="1日進める">▶▶</button>
           <button class="step-btn" data-unit="month" data-dir="1" title="1か月進める">▶▶▶</button>

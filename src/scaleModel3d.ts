@@ -109,28 +109,8 @@ export class ScaleModel3D {
   private playbackDateLabel = document.getElementById('scale-sim-date-label') as HTMLElement
   private static readonly SEEKBAR_MAX = 1000
 
-  // ---- ステップ再生 A/B比較用（一時的。docs/issue-009。判断がついたら片方を削除する） ----
-  private stepAbToggleBtn = document.getElementById('scale-step-ab-toggle') as HTMLButtonElement
-  private stepGroupBackA = document.getElementById('scale-step-back-a') as HTMLElement
-  private stepGroupFwdA = document.getElementById('scale-step-fwd-a') as HTMLElement
-  private stepGroupBackB = document.getElementById('scale-step-back-b') as HTMLElement
-  private stepGroupFwdB = document.getElementById('scale-step-fwd-b') as HTMLElement
-  private stepABackBtn = document.getElementById('scale-step-a-back') as HTMLButtonElement
-  private stepAFwdBtn = document.getElementById('scale-step-a-fwd') as HTMLButtonElement
-  private stepUiVariant: 'A' | 'B' = 'B'
-  // 案A: 選択中のモードに応じて1ステップの刻み幅を変える（日→1時間、月→1日、年→1か月）。
-  // クラス先頭側のフィールド初期化子はDAY_MS（クラス下部で定義）より先に評価されるため、
-  // ここでは参照できず素の値を書く
-  private static readonly STEP_A_DELTA_MS: Record<SimMode, number> = {
-    day: 60 * 60 * 1000,
-    month: 24 * 60 * 60 * 1000,
-    year: 30 * 24 * 60 * 60 * 1000,
-  }
-  private static readonly STEP_A_LABEL: Record<SimMode, string> = {
-    day: '1時間', month: '1日', year: '1か月',
-  }
-  // 案B: モードに関わらず時/日/月の3段を常に表示する
-  private static readonly STEP_B_DELTA_MS: Record<'hour' | 'day' | 'month', number> = {
+  // ---- ステップ再生（issue-009。時/日/月の3段を常時表示し、シーク範囲に縛られず時刻を移動する） ----
+  private static readonly STEP_DELTA_MS: Record<'hour' | 'day' | 'month', number> = {
     hour: 60 * 60 * 1000, day: 24 * 60 * 60 * 1000, month: 30 * 24 * 60 * 60 * 1000,
   }
 
@@ -572,20 +552,12 @@ export class ScaleModel3D {
       this.playback.seekFraction(parseInt(this.playbackSeekbar.value, 10) / ScaleModel3D.SEEKBAR_MAX)
     })
 
-    // ステップ再生 A/B比較用（一時的）
-    this.on(this.stepAbToggleBtn, 'click', () => {
-      this.stepUiVariant = this.stepUiVariant === 'A' ? 'B' : 'A'
-      this.updateStepUiVariant()
-    })
-    this.on(this.stepABackBtn, 'click', () => this.stepBy(-ScaleModel3D.STEP_A_DELTA_MS[this.simMode]))
-    this.on(this.stepAFwdBtn, 'click', () => this.stepBy(ScaleModel3D.STEP_A_DELTA_MS[this.simMode]))
+    // ステップ再生（issue-009）: シーク範囲に縛られず時刻そのものを進退させる
     for (const btn of document.querySelectorAll<HTMLButtonElement>('#scale-step-back-b .step-btn, #scale-step-fwd-b .step-btn')) {
       const unit = btn.dataset.unit as 'hour' | 'day' | 'month'
       const dir = Number(btn.dataset.dir)
-      this.on(btn, 'click', () => this.stepAnchorBy(ScaleModel3D.STEP_B_DELTA_MS[unit] * dir))
+      this.on(btn, 'click', () => this.stepAnchorBy(ScaleModel3D.STEP_DELTA_MS[unit] * dir))
     }
-    this.updateStepUiVariant()
-    this.updateStepALabels()
 
     this.updatePlaybackUI() // ボタンの見た目・シークバー・ラベルを初期状態に同期する
 
@@ -829,46 +801,18 @@ export class ScaleModel3D {
     this.simAnchorDate = new Date()
     this.playback.setPeriod(ScaleModel3D.SIM_PERIOD_MS[mode])
     this.playback.reset()
-    this.updateStepALabels() // 案Aのステップ幅表示はモードに連動するため、切替のたびに更新する
-  }
-
-  // ---- ステップ再生 A/B比較用（一時的。docs/issue-009。判断がついたら片方を削除する） ----
-
-  /** 案A用: 現在の再生位置から±deltaMsだけ移動する（シークバーの周期範囲でクランプ）。
-   *  手動シークと同様、再生中なら止める */
-  private stepBy(deltaMs: number) {
-    this.playback.pause()
-    this.playback.seekMs(this.playback.elapsedMilliseconds + deltaMs)
   }
 
   /**
-   * 案B用: シークバーの範囲に縛られず「今の時刻」そのものを±deltaMs動かす。stepBy()（案A）は
-   * シークバーの起点(モードに入った時点)〜終端(起点+周期)の中でしかクランプ移動できないため、
-   * 起点より前や終端より先へは進めなかった。こちらはsimAnchorDate自体をずらすことで、
-   * どれだけステップしても際限なく時間移動できるようにする。シークバー上の位置(elapsedMs)は
-   * リセットして常に「新しい今」を起点(0%)から見せる
+   * ステップ再生（issue-009）: シークバーの範囲に縛られず「今の時刻」そのものを±deltaMs動かす。
+   * シークバーの手動シーク（起点(モードに入った時点)〜終端(起点+周期)の中でしかクランプ移動でき
+   * ない）とは違い、simAnchorDate自体をずらすことで、どれだけステップしても際限なく時間移動
+   * できるようにする。シークバー上の位置(elapsedMs)はリセットして常に「新しい今」を起点(0%)から見せる
    */
   private stepAnchorBy(deltaMs: number) {
     this.playback.pause()
     this.simAnchorDate = new Date(this.simAnchorDate.getTime() + deltaMs)
     this.playback.reset()
-  }
-
-  /** 案Aの◀/▶ボタンの表示を、選択中モードの刻み幅に合わせて書き換える */
-  private updateStepALabels() {
-    const label = ScaleModel3D.STEP_A_LABEL[this.simMode]
-    this.stepABackBtn.textContent = `◀${label}`
-    this.stepAFwdBtn.textContent = `${label}▶`
-  }
-
-  /** A/B比較トグル: 表示するステップボタン群を切り替える */
-  private updateStepUiVariant() {
-    const isA = this.stepUiVariant === 'A'
-    this.stepGroupBackA.hidden = !isA
-    this.stepGroupFwdA.hidden = !isA
-    this.stepGroupBackB.hidden = isA
-    this.stepGroupFwdB.hidden = isA
-    this.stepAbToggleBtn.textContent = isA ? '案A' : '案B'
   }
 
   get currentSimMode(): SimMode {
