@@ -201,7 +201,6 @@ export class ScaleModel3D {
   // 巻き戻した時に正しい向きに戻せないため）
   private earthTiltQuaternion = new THREE.Quaternion()
   private earthAxisLine!: THREE.Line
-  private sunLightTarget!: THREE.Object3D
 
   private static readonly SIM_PERIOD_MS: Record<SimMode, number> = {
     day: DAY_MS,
@@ -364,14 +363,17 @@ export class ScaleModel3D {
       this.innerPlanetOrbitLineByKey[key] = orbitLine
     }
 
-    // 太陽→地球方向の平行光線（実際の太陽光の近似）。月もほぼ同じ方向で照らされるため、
-    // Sun→Earthの1本のDirectionalLightを共用する
-    const sunLight = new THREE.DirectionalLight(0xffffff, 1.6)
+    // 太陽の位置(原点)に置く点光源。天体ごとに「太陽からその天体への方向」を自動的に正しく
+    // 計算してくれるため、地球だけでなく水星・金星・火星もそれぞれ正しい向きで照らされる。
+    // 元々はSun→Earth方向のDirectionalLight（平行光線）1本を地球・月で共用していたが、
+    // 内惑星は地球とは全く違う方向・距離にいるため、この近似では影の付き方が破綻していた。
+    // decay:0（距離減衰なし）にしているのは、このアプリが実寸(太陽〜地球=86,125)とデフォルメ
+    // (同=100)で距離が3桁違うため、既定の距離減衰(2乗に反比例)だと片方の縮尺で明るすぎる/
+    // 暗すぎるになってしまうのを避けるため（今までのDirectionalLightと同じ「距離に関係なく
+    // 一定の明るさ」を保つ）
+    const sunLight = new THREE.PointLight(0xffffff, 1.6, 0, 0)
     sunLight.position.copy(SUN_POS)
-    this.sunLightTarget = sunLight.target
-    this.sunLightTarget.position.copy(EARTH_POS)
     this.scene.add(sunLight)
-    this.scene.add(this.sunLightTarget)
     // 夜側が完全な真っ黒にならない程度に、ごく控えめな環境光を足す
     this.scene.add(new THREE.AmbientLight(0xffffff, 0.12))
 
@@ -751,7 +753,6 @@ export class ScaleModel3D {
     this.earthMesh.position.copy(EARTH_POS)
     this.moonMesh.position.copy(MOON_POS)
     this.earthAxisLine.position.copy(EARTH_POS)
-    this.sunLightTarget.position.copy(EARTH_POS)
 
     // 衛星の公転ルート。earthOrbitLineは太陽(原点)中心で固定なので位置は変えず半径だけ更新する。
     // moonOrbitLineは地球を追って毎フレーム再配置する（地球自身が公転で動くため）
