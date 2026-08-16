@@ -3,13 +3,13 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <title>StarCanvas Hoshizora - 太陽・月位置シミュレーター</title>
-  <script type="module" crossorigin src="/StarCanvas-Hoshizora/assets/index-zBMJ5Ecq.js"></script>
-  <link rel="stylesheet" crossorigin href="/StarCanvas-Hoshizora/assets/index-CukgO7UV.css">
+  <title>天空プレイヤー - 太陽・月位置シミュレーター</title>
+  <script type="module" crossorigin src="/astro-player/assets/index-C2gFPUru.js"></script>
+  <link rel="stylesheet" crossorigin href="/astro-player/assets/index-u0oZj0SD.css">
 </head>
 <body>
   <header>
-    <h1 data-i18n="h1">StarCanvas Hoshizora &mdash; 太陽・月位置シミュレーター</h1>
+    <h1 data-i18n="h1">天空プレイヤー &mdash; 太陽・月位置シミュレーター</h1>
     <div class="header-actions">
       <button id="lang-btn" class="lang-btn">EN</button>
       <button id="toggle-controls" class="toggle-controls" aria-expanded="true" aria-label="設定を開閉" data-i18n-aria-label="toggle-aria">設定 ▲</button>
@@ -23,6 +23,21 @@
   <main>
     <!-- メニュー シーン -->
     <section id="scene-menu" class="menu-main">
+      <button id="menu-scale-orbit-btn" class="menu-card">
+        <span class="menu-card-icon">☀️</span>
+        <span class="menu-card-title" data-i18n="nav-scale-orbit">地球の公転</span>
+        <span class="menu-card-desc" data-i18n="menu-scale-orbit-desc">太陽の周りを回る地球と、月の動き・満ち欠けを見る</span>
+      </button>
+      <button id="menu-scale-spin-btn" class="menu-card">
+        <span class="menu-card-icon">🌓</span>
+        <span class="menu-card-title" data-i18n="nav-scale-spin">地球の自転</span>
+        <span class="menu-card-desc" data-i18n="menu-scale-spin-desc">地球の自転（昼と夜）と、月がいつも同じ面を向けている様子を見る</span>
+      </button>
+      <button id="menu-scale-btn" class="menu-card">
+        <span class="menu-card-icon">🌍</span>
+        <span class="menu-card-title" data-i18n="nav-scale">スケール</span>
+        <span class="menu-card-desc" data-i18n="menu-scale-desc">地球・月・太陽の距離と大きさを正確に再現</span>
+      </button>
       <button id="menu-dashboard-btn" class="menu-card">
         <span class="menu-card-icon">🪐</span>
         <span class="menu-card-title" data-i18n="nav-dashboard">3D+2D</span>
@@ -121,6 +136,59 @@
         <div class="zoom-slider-wrap">
           <input type="range" id="zoom-slider" class="zoom-slider" min="10" max="70" value="60" step="1">
         </div>
+      </div>
+    </section>
+
+    <!-- スケールモデル シーン（独立画面。設定パネル・シークバーは使わない） -->
+    <section id="scene-scale" class="scale-view" style="display: none">
+      <div class="view-title">
+        <span id="scale-scene-title">スケールモデル（距離・大きさを正確に再現）</span>
+        <div class="view-title-actions">
+          <button id="scale-target-focus-btn" class="fullscreen-btn" title="対象にフォーカス (Enter/F)" data-i18n-title="scale-target-focus-title">🔍</button>
+          <button id="scale-target-system-btn" class="fullscreen-btn" title="対象の系全体を表示" data-i18n-title="scale-target-system-title">🌐</button>
+          <button id="scale-fit-btn" class="fullscreen-btn" title="全体を表示 (Home)" data-i18n-title="scale-fit-title">🏠</button>
+          <button id="scale-deform-toggle-btn" class="scale-mode-btn" title="実寸⇔デフォルメ表示の切り替え（実験的）" data-i18n-title="scale-deform-title">実寸</button>
+          <button class="fullscreen-btn" data-target="scale" title="フルスクリーン" data-i18n-title="fullscreen-title">⛶</button>
+        </div>
+      </div>
+      <div class="scale-canvas-wrap">
+        <canvas id="canvas-scale"></canvas>
+        <div id="scale-date-hud" class="scale-date-hud">--</div>
+        <pre id="scale-debug-hud" class="scale-debug-hud"></pre>
+        <canvas id="scale-angle-gizmo" class="scale-angle-gizmo" width="96" height="96"></canvas>
+      </div>
+    </section>
+
+    <!-- スケールモデル専用の時間バー: 3D+2D/SKYの24hシークバーとは独立（issue #004） -->
+    <section id="scale-playback" class="playback" style="display: none">
+      <div class="scale-playback-row">
+        <div class="scale-mode-toggle" role="group" aria-label="時間モード">
+          <button id="scale-mode-day" class="scale-mode-btn" data-mode="day" data-i18n="scale-mode-day">日</button>
+          <button id="scale-mode-month" class="scale-mode-btn" data-mode="month" data-i18n="scale-mode-month">月</button>
+          <button id="scale-mode-year" class="scale-mode-btn" data-mode="year" data-i18n="scale-mode-year">年</button>
+        </div>
+      </div>
+      <div class="scale-playback-row">
+        <!-- ステップ再生（issue-009）: 時/日/月の3段を常時表示し、シーク範囲に縛られず時刻そのものを移動する -->
+        <div id="scale-step-back-b" class="scale-step-group">
+          <button class="step-btn" data-unit="month" data-dir="-1" title="1か月戻す">◀◀◀</button>
+          <button class="step-btn" data-unit="day" data-dir="-1" title="1日戻す">◀◀</button>
+          <button class="step-btn" data-unit="hour" data-dir="-1" title="1時間戻す">◀</button>
+        </div>
+
+        <button id="scale-play-btn" class="play-btn" title="再生/停止" data-i18n-title="play-title">▶</button>
+
+        <div id="scale-step-fwd-b" class="scale-step-group">
+          <button class="step-btn" data-unit="hour" data-dir="1" title="1時間進める">▶</button>
+          <button class="step-btn" data-unit="day" data-dir="1" title="1日進める">▶▶</button>
+          <button class="step-btn" data-unit="month" data-dir="1" title="1か月進める">▶▶▶</button>
+        </div>
+      </div>
+      <div class="seekbar-wrap">
+        <div class="seekbar-track-row">
+          <input type="range" id="scale-seekbar" min="0" max="1000" value="0" class="seekbar">
+        </div>
+        <div class="scale-seekbar-label" id="scale-sim-date-label">--</div>
       </div>
     </section>
 
