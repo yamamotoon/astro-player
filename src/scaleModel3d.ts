@@ -39,10 +39,13 @@ const SUN_POS = new THREE.Vector3(0, 0, 0)
 const EARTH_POS = new THREE.Vector3(EARTH_SUN_DIST, 0, 0)
 const MOON_POS = new THREE.Vector3(EARTH_SUN_DIST, 0, EARTH_MOON_DIST)
 
-// 地球の自転軸: 公転面の法線(Y)に対して実際の地軸傾斜23.44度だけ傾ける
+// 地球の自転軸: 公転面の法線(Y)に対して実際の地軸傾斜23.44度だけ傾ける。
+// 符号は-EARTH_AXIAL_TILT_DEGにする(+だと北半球の夏至(6月)に北極が反太陽側を向いてしまい、
+// 実際の季節と逆になるバグがあった。dayOfYearFraction()の公転角度の基準と、この傾きの
+// 向きの組み合わせで初めて決まるものなので、数値検証で確認して修正した)
 const EARTH_AXIAL_TILT_DEG = 23.44
 const EARTH_AXIS = new THREE.Vector3(0, 1, 0)
-  .applyAxisAngle(new THREE.Vector3(0, 0, 1), THREE.MathUtils.degToRad(EARTH_AXIAL_TILT_DEG))
+  .applyAxisAngle(new THREE.Vector3(0, 0, 1), THREE.MathUtils.degToRad(-EARTH_AXIAL_TILT_DEG))
 
 // 月の軌道面: 実際は地球の公転面(黄道面)に対して約5.14度傾いている。実際の昇交点は約18.6年周期で
 // 歳差運動するが、簡略化のため固定軸(X軸)まわりの傾きとして扱う（このアプリの円軌道簡略化と同じ方針）
