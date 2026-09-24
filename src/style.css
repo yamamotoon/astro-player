@@ -737,13 +737,8 @@ main[data-fs="view2d"]:fullscreen #canvas2d {
 }
 
 .step-btn svg {
-  width: 14px;
-  height: 14px;
-  margin-left: -4px;
-}
-
-.step-btn svg:first-child {
-  margin-left: 0;
+  width: 16px;
+  height: 16px;
 }
 
 .step-btn:hover {

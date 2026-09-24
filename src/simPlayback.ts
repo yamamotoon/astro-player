@@ -1,9 +1,13 @@
 import { PlaybackController } from './playbackController'
-import { setIcon, setChevronSteps } from './iconInjector'
+import { setIcon } from './iconInjector'
 import playIconSvg from './icons/play.svg?raw'
 import pauseIconSvg from './icons/pause.svg?raw'
-import chevronLeftSvg from './icons/chevron-left.svg?raw'
-import chevronRightSvg from './icons/chevron-right.svg?raw'
+import chevronLeft1Svg from './icons/chevron-left.svg?raw'
+import chevronLeft2Svg from './icons/chevron-left-2.svg?raw'
+import chevronLeft3Svg from './icons/chevron-left-3.svg?raw'
+import chevronRight1Svg from './icons/chevron-right.svg?raw'
+import chevronRight2Svg from './icons/chevron-right-2.svg?raw'
+import chevronRight3Svg from './icons/chevron-right-3.svg?raw'
 
 export type SimMode = 'day' | 'month' | 'year'
 
@@ -146,14 +150,20 @@ export function createSimPlaybackController(
   })
 
   // ステップボタンの矢印の数(1〜3)は単位(時=1/日=2/月=3)を表す。向き(dir)で左右どちらの
-  // 矢印アイコンを使うかを決める
-  const STEP_CHEVRON_COUNT: Record<'hour' | 'day' | 'month', number> = { hour: 1, day: 2, month: 3 }
+  // 矢印アイコンを使うかを決める。複数の矢印は1つのSVGに描いた単一アイコンとして扱う
+  // （svg要素を複数並べるとボタン幅が個別に伸び、狭い画面でボタン列が2段落ちするため）
+  const STEP_CHEVRON_ICONS: Record<'hour' | 'day' | 'month', [left: string, right: string]> = {
+    hour: [chevronLeft1Svg, chevronRight1Svg],
+    day: [chevronLeft2Svg, chevronRight2Svg],
+    month: [chevronLeft3Svg, chevronRight3Svg],
+  }
   for (const btn of document.querySelectorAll<HTMLButtonElement>(
     `#${idPrefix}-step-back-b .step-btn, #${idPrefix}-step-fwd-b .step-btn`
   )) {
     const unit = btn.dataset.unit as 'hour' | 'day' | 'month'
     const dir = Number(btn.dataset.dir)
-    setChevronSteps(btn, dir < 0 ? chevronLeftSvg : chevronRightSvg, STEP_CHEVRON_COUNT[unit])
+    const [leftIcon, rightIcon] = STEP_CHEVRON_ICONS[unit]
+    setIcon(btn, dir < 0 ? leftIcon : rightIcon)
     on(btn, 'click', () => stepAnchorBy(STEP_DELTA_MS[unit] * dir))
   }
 

@@ -6,8 +6,3 @@
 export function setIcon(el: Element, svg: string) {
   el.innerHTML = svg
 }
-
-/** 矢印(chevron)をn個並べて挿入する。ステップボタン(◀◀◀/▶▶等)の表現に使う */
-export function setChevronSteps(el: Element, chevronSvg: string, count: number) {
-  el.innerHTML = chevronSvg.repeat(count)
-}
