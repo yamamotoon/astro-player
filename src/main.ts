@@ -2,7 +2,7 @@ import './style.css'
 import { applyLang, getLang, t } from './i18n'
 import { Scene3D } from './scene3d'
 import { Compass2D } from './compass2d'
-import { getAstroData, formatTime } from './astroCalc'
+import { getAstroData } from './astroCalc'
 import { ARView } from './ar'
 import { ScaleModel3D, type ScaleModelConfig } from './scaleModel3d'
 import { PlaybackController } from './playbackController'
@@ -86,15 +86,11 @@ function getSettings() {
   return { lat, lng, date }
 }
 
-function setText(id: string, value: string) {
-  const el = document.getElementById(id)
-  if (el) el.textContent = value
-}
-
 // ---- シーン切り替え（メニュー / 3D+2D / SKY / スケールモデル） ----
 const sceneMenu = document.getElementById('scene-menu') as HTMLElement
 const sceneHud = document.getElementById('scene-hud') as HTMLElement
 const scenePlayback = document.getElementById('scene-playback') as HTMLElement
+const dashboardPlaybackSection = document.getElementById('dashboard-playback') as HTMLElement
 const scalePlayback = document.getElementById('scale-playback') as HTMLElement
 const sceneDashboard = document.getElementById('scene-dashboard') as HTMLElement
 const sceneSky = document.getElementById('scene-sky') as HTMLElement
@@ -119,7 +115,8 @@ function showScene(name: SceneName) {
   const showHud = name === 'dashboard' || name === 'sky'
   sceneMenu.style.display = name === 'menu' ? '' : 'none'
   sceneHud.style.display = showHud ? '' : 'none'
-  scenePlayback.style.display = showHud ? '' : 'none'
+  scenePlayback.style.display = name === 'sky' ? '' : 'none'
+  dashboardPlaybackSection.style.display = name === 'dashboard' ? '' : 'none'
   sceneDashboard.style.display = name === 'dashboard' ? '' : 'none'
   sceneSky.style.display = name === 'sky' ? '' : 'none'
   sceneScale.style.display = name === 'scale' ? '' : 'none'
@@ -275,11 +272,6 @@ function update() {
   scene3d.update(data)
   compass2d.draw(data, compass2dEnabled ? compassHeadingDeg : 0)
   arView.setData(data, lat, lng, date)
-
-  setText('sun-rise', formatTime(data.sunTimes.sunrise))
-  setText('sun-set', formatTime(data.sunTimes.sunset))
-  setText('moon-rise', formatTime(data.moonRise))
-  setText('moon-set', formatTime(data.moonSet))
 
   if (constCheck.checked) {
     scene3d.updateConstellations(lat, lng, date)
@@ -457,3 +449,128 @@ function animLoop(timestamp: number) {
   if (!playback.isPlaying) playBtn.textContent = '▶' // 周期終端に達して自動停止した場合
 }
 requestAnimationFrame(animLoop)
+
+// ---- 3D+2D専用: 日/月/年モードの時間バー（scaleModel3d.tsの時間制御と同じ仕組み）----
+// SKYの24hシミュレーション（playback/seekbar/playBtn、上のブロック）とは完全に別状態・別DOM。
+// ここで進めた時刻はdatetimeInput.valueへ反映し、既存のupdate()で天体位置に反映させる
+type DashboardSimMode = 'day' | 'month' | 'year'
+const DASHBOARD_SIM_PERIOD_MS: Record<DashboardSimMode, number> = {
+  day: DAY_MS,
+  month: 30 * DAY_MS,
+  year: 365 * DAY_MS,
+}
+const DASHBOARD_SIM_REAL_DURATION_MS = 24_000 // 24hシミュレーションと同じ体感速度に揃える
+const DASHBOARD_STEP_DELTA_MS: Record<'hour' | 'day' | 'month', number> = {
+  hour: 60 * 60 * 1000, day: 24 * 60 * 60 * 1000, month: 30 * 24 * 60 * 60 * 1000,
+}
+const DASHBOARD_SEEKBAR_MAX = 1000
+
+let dashboardSimMode: DashboardSimMode = 'day'
+let dashboardSimAnchorDate = new Date()
+const dashboardPlayback = new PlaybackController(DASHBOARD_SIM_PERIOD_MS.day, DASHBOARD_SIM_REAL_DURATION_MS)
+
+const dashboardModeButtons: Record<DashboardSimMode, HTMLButtonElement> = {
+  day: document.getElementById('dashboard-mode-day') as HTMLButtonElement,
+  month: document.getElementById('dashboard-mode-month') as HTMLButtonElement,
+  year: document.getElementById('dashboard-mode-year') as HTMLButtonElement,
+}
+const dashboardPlaybackPlayBtn = document.getElementById('dashboard-play-btn') as HTMLButtonElement
+const dashboardNowBtn = document.getElementById('dashboard-now-btn') as HTMLButtonElement
+const dashboardPlaybackSeekbar = document.getElementById('dashboard-seekbar') as HTMLInputElement
+const dashboardPlaybackDateLabel = document.getElementById('dashboard-sim-date-label') as HTMLElement
+
+function dashboardCurrentSimDate(): Date {
+  return new Date(dashboardSimAnchorDate.getTime() + dashboardPlayback.elapsedMilliseconds)
+}
+
+function formatDashboardSimDate(date: Date, mode: DashboardSimMode): string {
+  const pad = (n: number) => String(n).padStart(2, '0')
+  const dateStr = `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
+  if (mode === 'day') return `${dateStr} ${pad(date.getHours())}:${pad(date.getMinutes())}`
+  return dateStr
+}
+
+/** 日/月/年モードを切り替える。シークバーは常に現在時刻を起点に先頭へリセットする */
+function setDashboardSimMode(mode: DashboardSimMode) {
+  dashboardSimMode = mode
+  resetDashboardToNow()
+}
+
+/** モードは変えず、シミュレーション時刻だけを現在時刻に戻す（NOWボタン） */
+function resetDashboardToNow() {
+  dashboardSimAnchorDate = new Date()
+  dashboardPlayback.setPeriod(DASHBOARD_SIM_PERIOD_MS[dashboardSimMode])
+  dashboardPlayback.reset()
+  realtimeCheck.checked = false
+  stopRealtime()
+  applyDashboardSimDate()
+}
+
+/** シークバーの範囲に縛られず「今の時刻」そのものを±deltaMs動かす */
+function stepDashboardAnchorBy(deltaMs: number) {
+  dashboardPlayback.pause()
+  dashboardSimAnchorDate = new Date(dashboardSimAnchorDate.getTime() + deltaMs)
+  dashboardPlayback.reset()
+  realtimeCheck.checked = false
+  stopRealtime()
+  applyDashboardSimDate()
+}
+
+function applyDashboardSimDate() {
+  datetimeInput.value = toDatetimeLocal(dashboardCurrentSimDate())
+  update()
+  updateDashboardPlaybackUI()
+}
+
+/** 時間バー(モードボタンの見た目・シークバーの位置・再生ボタンのアイコン・日時ラベル)を同期する */
+function updateDashboardPlaybackUI() {
+  for (const key of ['day', 'month', 'year'] as const) {
+    dashboardModeButtons[key].classList.toggle('active', key === dashboardSimMode)
+  }
+  dashboardPlaybackPlayBtn.textContent = dashboardPlayback.isPlaying ? '⏸' : '▶'
+  dashboardPlaybackSeekbar.value = String(Math.round(dashboardPlayback.fraction * DASHBOARD_SEEKBAR_MAX))
+  dashboardPlaybackDateLabel.textContent = formatDashboardSimDate(dashboardCurrentSimDate(), dashboardSimMode)
+}
+
+for (const key of ['day', 'month', 'year'] as const) {
+  dashboardModeButtons[key].addEventListener('click', () => setDashboardSimMode(key))
+}
+
+dashboardNowBtn.addEventListener('click', () => resetDashboardToNow())
+
+dashboardPlaybackPlayBtn.addEventListener('click', () => {
+  dashboardPlayback.togglePlay()
+  if (dashboardPlayback.isPlaying) {
+    realtimeCheck.checked = false
+    stopRealtime()
+  }
+  updateDashboardPlaybackUI()
+})
+
+dashboardPlaybackSeekbar.addEventListener('input', () => {
+  dashboardPlayback.pause()
+  dashboardPlayback.seekFraction(parseInt(dashboardPlaybackSeekbar.value, 10) / DASHBOARD_SEEKBAR_MAX)
+  realtimeCheck.checked = false
+  stopRealtime()
+  applyDashboardSimDate()
+})
+
+for (const btn of document.querySelectorAll<HTMLButtonElement>('#dashboard-step-back-b .step-btn, #dashboard-step-fwd-b .step-btn')) {
+  const unit = btn.dataset.unit as 'hour' | 'day' | 'month'
+  const dir = Number(btn.dataset.dir)
+  btn.addEventListener('click', () => stepDashboardAnchorBy(DASHBOARD_STEP_DELTA_MS[unit] * dir))
+}
+
+updateDashboardPlaybackUI()
+
+// 継続的なrAFループ（SKY側のanimLoopと同じ仕組みの独立版）
+let lastDashboardAnimTime: number | null = null
+function dashboardAnimLoop(timestamp: number) {
+  requestAnimationFrame(dashboardAnimLoop)
+  const dt = lastDashboardAnimTime === null ? 0 : (timestamp - lastDashboardAnimTime) / 1000
+  lastDashboardAnimTime = timestamp
+  if (!dashboardPlayback.isPlaying) return
+  dashboardPlayback.tick(dt)
+  applyDashboardSimDate()
+}
+requestAnimationFrame(dashboardAnimLoop)

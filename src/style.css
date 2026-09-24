@@ -433,9 +433,8 @@ main:fullscreen .scale-view {
   overflow: hidden;
 }
 
-/* フルスクリーン中はトグル・情報パネルを隠し、表示中のビューだけをフル表示 */
-main:fullscreen .view-toggle,
-main:fullscreen .info-panel {
+/* フルスクリーン中はトグルを隠し、表示中のビューだけをフル表示 */
+main:fullscreen .view-toggle {
   display: none;
 }
 
@@ -541,34 +540,6 @@ main[data-fs="view2d"]:fullscreen #canvas2d {
   height: min(70vh, 90vw, 420px);
 }
 
-.info-panel {
-  flex-shrink: 0;
-  border-top: 1px solid #2a2a4a;
-}
-
-#info-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 0.8rem;
-}
-
-#info-table th,
-#info-table td {
-  padding: 5px 10px;
-  border-bottom: 1px solid #1a1a38;
-  text-align: left;
-}
-
-#info-table th {
-  color: #7080a0;
-  background: #0d0d2b;
-  font-weight: normal;
-}
-
-#info-table td:first-child {
-  color: #7080a0;
-}
-
 /* ---- 24時間シミュレーション バー（画面下部固定・親指操作用） ---- */
 .playback {
   display: flex;
@@ -585,11 +556,11 @@ main[data-fs="view2d"]:fullscreen #canvas2d {
   background: #1e3a6e;
   border: 1px solid #3a5a9e;
   color: #a0c0ff;
-  width: 28px;
-  height: 28px;
+  width: 40px;
+  height: 40px;
   border-radius: 50%;
   cursor: pointer;
-  font-size: 0.75rem;
+  font-size: 0.95rem;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -649,9 +620,10 @@ main[data-fs="view2d"]:fullscreen #canvas2d {
   background: transparent;
   border: 1px solid #2a2a4a;
   color: #7080a0;
-  font-size: 0.7rem;
-  padding: 3px 8px;
-  border-radius: 4px;
+  font-size: 0.85rem;
+  padding: 8px 16px;
+  min-height: 40px;
+  border-radius: 6px;
   cursor: pointer;
 }
 
@@ -665,15 +637,38 @@ main[data-fs="view2d"]:fullscreen #canvas2d {
   color: #a0c0ff;
 }
 
-.scale-seekbar-label {
-  font-size: 0.64rem;
-  color: #506080;
-  white-space: nowrap;
-  padding: 0 2px;
+/* NOWボタン: モードは変えず、シミュレーション時刻だけを現在時刻に戻す。
+   押した時だけ意味がある操作なので、常時目立つ色にして発見性を上げる */
+.now-btn {
+  background: transparent;
+  border: 1px solid #3a5a9e;
+  color: #a0c0ff;
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 8px 14px;
+  min-height: 40px;
+  border-radius: 6px;
+  cursor: pointer;
+  flex-shrink: 0;
 }
 
-/* ---- スケールモデルの時間バー: モード切替・ステップ再生・シークバーの3段構成（issue-009） ---- */
-#scale-playback {
+.now-btn:hover {
+  background: #1a2a4a;
+}
+
+.scale-seekbar-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #a0c0ff;
+  white-space: nowrap;
+  padding: 0 2px;
+  text-align: center;
+}
+
+/* ---- 日/月/年モードの時間バー: モード切替・ステップ再生・シークバーの3段構成（issue-009）。
+   #scale-playback（スケールモデル）と#dashboard-playback（3D+2D）で共通の見た目にする ---- */
+#scale-playback,
+#dashboard-playback {
   flex-direction: column;
   align-items: stretch;
   gap: 6px;
@@ -707,8 +702,10 @@ main[data-fs="view2d"]:fullscreen #canvas2d {
   background: transparent;
   border: 1px solid #2a2a4a;
   color: #7080a0;
-  font-size: 0.66rem;
-  padding: 5px 9px;
+  font-size: 0.8rem;
+  padding: 8px 9px;
+  min-height: 40px;
+  min-width: 40px;
   border-radius: 6px;
   white-space: nowrap;
   cursor: pointer;
@@ -834,32 +831,8 @@ main[data-fs="view2d"]:fullscreen #canvas2d {
     gap: 8px;
   }
 
-  .play-btn {
-    width: 36px;
-    height: 36px;
-    font-size: 0.9rem;
-  }
-
-  .scale-mode-btn {
-    padding: 6px 10px;
-    font-size: 0.78rem;
-  }
-
-  /* ステップ再生ボタン: 横幅が厳しいので詰める。矢印の数(◀/◀◀/◀◀◀)で刻み幅を表すため
-     文字より場所を取らない */
-  .step-btn {
-    padding: 6px 8px;
-    font-size: 0.72rem;
-  }
-
   .scale-step-group {
     gap: 3px;
-  }
-
-  #info-table th,
-  #info-table td {
-    padding: 6px 10px;
-    font-size: 0.82rem;
   }
 }
 
@@ -917,12 +890,6 @@ main[data-fs="view2d"]:fullscreen #canvas2d {
     height: min(50vh, 60vw);
   }
 
-  #info-table th,
-  #info-table td {
-    padding: 4px 8px;
-    font-size: 0.78rem;
-  }
-
   /* SKY: ズームスライダーが縦180pxのままだと高さ不足の端末でheader/ar-hudと重なる/はみ出るため縮める */
   .zoom-slider-wrap {
     height: 120px;
@@ -932,12 +899,13 @@ main[data-fs="view2d"]:fullscreen #canvas2d {
     width: 120px;
   }
 
-  /* スケールモデル: 縦向きは3段（モード切替／ステップ+再生／シークバー）だが、横向きは
+  /* 日/月/年モードの時間バー: 縦向きは3段（モード切替／ステップ+再生／シークバー）だが、横向きは
      縦の余裕がない代わりに横は十分広い。ボタンを小さくして押しにくくするのではなく、
-     .scale-playback-row(2つ)をdisplay:contentsにして中身を#scale-playback自身の
-     flexアイテムとして直接並べ、幅が許す限り1行にまとめる（入りきらなければ自然に折り返す
+     .scale-playback-row(2つ)をdisplay:contentsにして中身を#scale-playback/#dashboard-playback
+     自身のflexアイテムとして直接並べ、幅が許す限り1行にまとめる（入りきらなければ自然に折り返す
      だけなので、極端に狭い端末でも崩れはしない）。シークバーは常に単独の行にする */
-  #scale-playback {
+  #scale-playback,
+  #dashboard-playback {
     flex-direction: row;
     flex-wrap: wrap;
     justify-content: center;

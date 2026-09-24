@@ -105,6 +105,7 @@ export class ScaleModel3D {
     year: document.getElementById('scale-mode-year') as HTMLButtonElement,
   }
   private playbackPlayBtn = document.getElementById('scale-play-btn') as HTMLButtonElement
+  private playbackNowBtn = document.getElementById('scale-now-btn') as HTMLButtonElement
   private playbackSeekbar = document.getElementById('scale-seekbar') as HTMLInputElement
   private playbackDateLabel = document.getElementById('scale-sim-date-label') as HTMLElement
   private static readonly SEEKBAR_MAX = 1000
@@ -548,6 +549,7 @@ export class ScaleModel3D {
       this.on(btn, 'click', () => this.setSimMode(key))
     }
     this.on(this.playbackPlayBtn, 'click', () => this.togglePlayback())
+    this.on(this.playbackNowBtn, 'click', () => this.resetToNow())
     this.on(this.playbackSeekbar, 'input', () => {
       // 手動でシークバーを動かしたら再生を止める（既存の24hシミュレーションと同じ挙動）
       this.playback.pause()
@@ -799,8 +801,13 @@ export class ScaleModel3D {
   /** 日/月/年モードを切り替える。シークバーは常に現在時刻を起点に先頭へリセットする */
   setSimMode(mode: SimMode) {
     this.simMode = mode
+    this.resetToNow()
+  }
+
+  /** モードは変えず、シミュレーション時刻だけを現在時刻に戻す（NOWボタン） */
+  resetToNow() {
     this.simAnchorDate = new Date()
-    this.playback.setPeriod(ScaleModel3D.SIM_PERIOD_MS[mode])
+    this.playback.setPeriod(ScaleModel3D.SIM_PERIOD_MS[this.simMode])
     this.playback.reset()
   }
 
