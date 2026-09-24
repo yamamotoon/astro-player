@@ -167,6 +167,59 @@ export class Scene3D {
     return s
   }
 
+  /**
+   * カメラの水平方向(yaw)だけをコンパス方位に合わせる。上下(仰角)はユーザーの
+   * 手動操作(OrbitControls)のまま変更しない。
+   * headingDeg: デバイスが向いている方角（北基準・時計回り、0=北）
+   *
+   * 座標系: Three.jsのSpherical.thetaは+Z方向を0とし、atan2(x,z)で定義される
+   * （node_modules/three/src/math/Spherical.js）。一方、天体位置はSunCalc規約の
+   * azimuthRadをpositionToXYZ()に渡して求めており、北(SunCalc az=π)はx=0,z=-R
+   * （astroCalc.tsのpositionToXYZ参照）＝北基準0°の方向はThree.js座標で-Z。
+   * よってtarget基準で「北基準角度 θ_north」の方向のtheta値は
+   *   theta_north = atan2(sin(-θ_north)*R, -cos(θ_north)*R) = π - θ_north
+   * （θ_north=0→theta=π(-Z)、θ_north=90°(東)→theta=π/2(+X)で一致）。
+   *
+   * カメラを「headingDeg方向を正面に見る」配置にするには、target→cameraの
+   * オフセットベクトルがその逆方向（画面手前側）を向く必要があるため、
+   * オフセットのthetaは上式に180°(π)を足したものになる:
+   *   offsetTheta = (π - headingRad) + π = 2π - headingRad ≡ -headingRad
+   */
+  setCompassHeading(headingDeg: number) {
+    const target = this.controls.target
+    const offset = new THREE.Vector3().subVectors(this.camera.position, target)
+    const spherical = new THREE.Spherical().setFromVector3(offset)
+    spherical.theta = -THREE.MathUtils.degToRad(headingDeg)
+    offset.setFromSpherical(spherical)
+    this.camera.position.copy(target).add(offset)
+    // 方位磁石モード中はOrbitControlsの水平ドラッグを無効化しているが、
+    // そのロック範囲(min/maxAzimuthAngle)も新しいthetaに追従させないと
+    // 次のcontrols.update()でカメラが範囲外とみなされ押し戻されてしまう
+    if (this.controls.minAzimuthAngle === this.controls.maxAzimuthAngle) {
+      this.controls.minAzimuthAngle = spherical.theta
+      this.controls.maxAzimuthAngle = spherical.theta
+    }
+    this.controls.update()
+  }
+
+  /**
+   * 方位磁石モードのON/OFFに合わせて、OrbitControlsの水平方向(azimuthal)
+   * ドラッグだけを禁止/許可する。上下方向のドラッグは常に許可したままにする
+   * （OrbitControlsにazimuthとpolarを個別にdisableするAPIは無いため、
+   * min/maxAzimuthAngleを現在角に固定することで水平方向だけをロックする）。
+   */
+  setCompassLocked(locked: boolean) {
+    if (locked) {
+      const offset = new THREE.Vector3().subVectors(this.camera.position, this.controls.target)
+      const theta = new THREE.Spherical().setFromVector3(offset).theta
+      this.controls.minAzimuthAngle = theta
+      this.controls.maxAzimuthAngle = theta
+    } else {
+      this.controls.minAzimuthAngle = -Infinity
+      this.controls.maxAzimuthAngle = Infinity
+    }
+  }
+
   update(data: AstroData) {
     const [sx, sy, sz] = positionToXYZ(data.sun.azimuthRad, data.sun.altitudeRad, R)
     this.sunMesh.position.set(sx, sy, sz)

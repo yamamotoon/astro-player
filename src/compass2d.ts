@@ -17,7 +17,12 @@ export class Compass2D {
     this.r = Math.min(this.w, this.h) / 2 - 28
   }
 
-  draw(data: AstroData) {
+  /**
+   * @param headingDeg 画面上部に表示する方位（北基準・時計回り）。
+   *   0=北固定表示。方位磁石モードONの時はデバイスの向いている方角(コンパス方位)を渡す
+   *   ことで、その方角が画面上部に来るよう図全体を回転させる。
+   */
+  draw(data: AstroData, headingDeg = 0) {
     const { ctx, cx, cy, r } = this
     ctx.clearRect(0, 0, this.w, this.h)
 
@@ -72,14 +77,14 @@ export class Compass2D {
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
     for (const { label, deg, color } of cards) {
-      const rad = (deg - 90) * Math.PI / 180
+      const rad = (deg - headingDeg - 90) * Math.PI / 180
       ctx.fillStyle = color
       ctx.fillText(label, cx + Math.cos(rad) * (r + 16), cy + Math.sin(rad) * (r + 16))
     }
 
     // Draw sun and moon
-    this.drawBody(data.sun.azimuthDeg, data.sun.altitudeDeg, '#ffee44', '☀')
-    this.drawBody(data.moon.azimuthDeg, data.moon.altitudeDeg, '#aaaadd', '☽')
+    this.drawBody(data.sun.azimuthDeg - headingDeg, data.sun.altitudeDeg, '#ffee44', '☀')
+    this.drawBody(data.moon.azimuthDeg - headingDeg, data.moon.altitudeDeg, '#aaaadd', '☽')
 
     // Legend
     ctx.font = '10px Arial'

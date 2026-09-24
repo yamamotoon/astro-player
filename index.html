@@ -8,16 +8,13 @@
 </head>
 <body>
   <header>
-    <h1 data-i18n="h1">天空プレイヤー &mdash; 太陽・月位置シミュレーター</h1>
+    <button id="back-to-menu-btn" class="back-btn" aria-label="メニューに戻る" data-i18n-aria-label="nav-back" hidden>←</button>
+    <h1 data-i18n="h1">天空プレイヤー</h1>
     <div class="header-actions">
       <button id="lang-btn" class="lang-btn">EN</button>
-      <button id="toggle-controls" class="toggle-controls" aria-expanded="true" aria-label="設定を開閉" data-i18n-aria-label="toggle-aria">設定 ▲</button>
+      <button id="toggle-controls" class="toggle-controls" aria-expanded="false" aria-label="設定を開閉" data-i18n-aria-label="toggle-aria" hidden>設定 ▼</button>
     </div>
   </header>
-
-  <nav class="top-nav" id="back-nav" hidden>
-    <button id="back-to-menu-btn" class="top-nav-link" data-i18n="nav-menu">☰ メニュー</button>
-  </nav>
 
   <main>
     <!-- メニュー シーン -->
@@ -51,7 +48,7 @@
 
     <!-- 共有の設定パネル: メニュー以外の全シーンで表示 -->
     <section id="scene-hud" style="display: none">
-      <section class="controls">
+      <section class="controls collapsed">
         <div class="control-group">
           <label data-i18n="location">場所</label>
           <div class="location-inputs">
@@ -88,35 +85,56 @@
 
     <!-- 3D+2D シーン -->
     <section id="scene-dashboard" class="views" style="display: none">
+      <div class="view-toggle" role="group" aria-label="3D/2D表示切替">
+        <button id="view-toggle-3d" class="view-toggle-btn" data-view="3d" data-i18n="view-3d">3D 天球</button>
+        <button id="view-toggle-2d" class="view-toggle-btn" data-view="2d" data-i18n="view-2d">2D 方位図</button>
+      </div>
       <div class="view-3d">
-        <div class="view-title">
-          <span data-i18n="view-3d">3D 天球</span>
+        <div class="view-actions">
           <button class="fullscreen-btn" data-target="view3d" title="フルスクリーン" data-i18n-title="fullscreen-title">⛶</button>
         </div>
+        <button id="compass-toggle-3d" class="compass-fab" title="デバイスの向きに合わせる" data-i18n-title="compass-toggle-title" aria-pressed="false">
+          <svg viewBox="0 0 24 24" class="compass-fab-icon">
+            <circle cx="12" cy="12" r="10.5" class="compass-fab-ring" />
+            <circle cx="12" cy="4.2" r="0.6" class="compass-fab-tick" />
+            <circle cx="12" cy="19.8" r="0.6" class="compass-fab-tick" />
+            <circle cx="4.2" cy="12" r="0.6" class="compass-fab-tick" />
+            <circle cx="19.8" cy="12" r="0.6" class="compass-fab-tick" />
+            <path d="M12 3.3 L14 12 L12 12 L10 12 Z" class="compass-fab-needle-n" />
+            <path d="M12 20.7 L10 12 L12 12 L14 12 Z" class="compass-fab-needle-s" />
+            <circle cx="12" cy="12" r="1.3" class="compass-fab-pivot" />
+          </svg>
+        </button>
         <canvas id="canvas3d"></canvas>
       </div>
-      <div class="view-right">
-        <div class="view-2d">
-          <div class="view-title">
-            <span data-i18n="view-2d">2D 方位図</span>
-            <button class="fullscreen-btn" data-target="view2d" title="フルスクリーン" data-i18n-title="fullscreen-title">⛶</button>
-          </div>
-          <canvas id="canvas2d" width="280" height="280"></canvas>
+      <div class="view-2d">
+        <div class="view-actions">
+          <button class="fullscreen-btn" data-target="view2d" title="フルスクリーン" data-i18n-title="fullscreen-title">⛶</button>
         </div>
-        <div class="info-panel">
-          <div class="view-title" data-i18n="celestial-info">天体情報</div>
-          <table id="info-table">
-            <thead>
-              <tr><th data-i18n="col-item">項目</th><th data-i18n="col-sun">太陽</th><th data-i18n="col-moon">月</th></tr>
-            </thead>
-            <tbody>
-              <tr><td data-i18n="row-az">方位角</td><td id="sun-az">-</td><td id="moon-az">-</td></tr>
-              <tr><td data-i18n="row-alt">高度角</td><td id="sun-alt">-</td><td id="moon-alt">-</td></tr>
-              <tr><td data-i18n="row-rise">出</td><td id="sun-rise">-</td><td id="moon-rise">-</td></tr>
-              <tr><td data-i18n="row-set">入り</td><td id="sun-set">-</td><td id="moon-set">-</td></tr>
-            </tbody>
-          </table>
-        </div>
+        <button id="compass-toggle-2d" class="compass-fab" title="デバイスの向きに合わせる" data-i18n-title="compass-toggle-title" aria-pressed="false">
+          <svg viewBox="0 0 24 24" class="compass-fab-icon">
+            <circle cx="12" cy="12" r="10.5" class="compass-fab-ring" />
+            <circle cx="12" cy="4.2" r="0.6" class="compass-fab-tick" />
+            <circle cx="12" cy="19.8" r="0.6" class="compass-fab-tick" />
+            <circle cx="4.2" cy="12" r="0.6" class="compass-fab-tick" />
+            <circle cx="19.8" cy="12" r="0.6" class="compass-fab-tick" />
+            <path d="M12 3.3 L14 12 L12 12 L10 12 Z" class="compass-fab-needle-n" />
+            <path d="M12 20.7 L10 12 L12 12 L14 12 Z" class="compass-fab-needle-s" />
+            <circle cx="12" cy="12" r="1.3" class="compass-fab-pivot" />
+          </svg>
+        </button>
+        <canvas id="canvas2d" width="280" height="280"></canvas>
+      </div>
+      <div class="info-panel">
+        <table id="info-table">
+          <thead>
+            <tr><th data-i18n="col-item">項目</th><th data-i18n="col-sun">太陽</th><th data-i18n="col-moon">月</th></tr>
+          </thead>
+          <tbody>
+            <tr><td data-i18n="row-rise">出</td><td id="sun-rise">-</td><td id="moon-rise">-</td></tr>
+            <tr><td data-i18n="row-set">入り</td><td id="sun-set">-</td><td id="moon-set">-</td></tr>
+          </tbody>
+        </table>
       </div>
     </section>
 

@@ -23,19 +23,25 @@ main {
 }
 
 header {
-  padding: 8px 16px;
+  padding: 8px max(16px, env(safe-area-inset-right)) 8px max(16px, env(safe-area-inset-left));
+  padding-top: max(8px, env(safe-area-inset-top));
   background: #0d0d2b;
   border-bottom: 1px solid #2a2a4a;
   flex-shrink: 0;
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 10px;
 }
 
 header h1 {
+  flex: 1;
+  min-width: 0;
   font-size: 1rem;
   font-weight: 600;
   color: #a0c0ff;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .header-actions {
@@ -45,30 +51,28 @@ header h1 {
   flex-shrink: 0;
 }
 
-.top-nav {
-  display: flex;
-  gap: 6px;
-  padding: 6px 16px;
-  background: #08081f;
-  border-bottom: 1px solid #2a2a4a;
+.back-btn {
   flex-shrink: 0;
-}
-
-.top-nav-link {
   background: none;
-  color: #7080a0;
-  text-decoration: none;
-  font: inherit;
-  font-size: 0.82rem;
-  padding: 4px 14px;
-  border-radius: 5px;
-  border: 1px solid transparent;
+  border: 1px solid #2a2a4a;
+  color: #a0c0ff;
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  font-size: 1.1rem;
+  line-height: 1;
   cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
-.top-nav-link:hover {
-  background: #1a1a40;
-  color: #a0c0ff;
+.back-btn:hover {
+  background: #1a2a4a;
+}
+
+.back-btn[hidden] {
+  display: none;
 }
 
 /* ---- メニュー画面 ---- */
@@ -139,10 +143,13 @@ header h1 {
   border: 1px solid #4a4a8a;
   color: #a0b0e0;
   padding: 3px 10px;
+  min-height: 40px;
   border-radius: 4px;
   font-size: 0.75rem;
   cursor: pointer;
   white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
 }
 
 .lang-btn:hover {
@@ -151,18 +158,21 @@ header h1 {
 }
 
 .toggle-controls {
-  display: none; /* デスクトップでは非表示 */
   background: #1a1a40;
   border: 1px solid #2a2a4a;
   color: #7080a0;
   padding: 3px 10px;
+  min-height: 40px;
   border-radius: 4px;
   font-size: 0.75rem;
   cursor: pointer;
   white-space: nowrap;
   flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
 }
 
+/* 情報過多を避けるため既定で折りたたみ。開閉は#toggle-controlsボタンで操作する */
 .controls {
   display: flex;
   gap: 16px;
@@ -172,6 +182,16 @@ header h1 {
   align-items: center;
   flex-wrap: wrap;
   flex-shrink: 0;
+  overflow: hidden;
+  max-height: 220px;
+  transition: max-height 0.25s ease, padding 0.25s ease;
+}
+
+.controls.collapsed {
+  max-height: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+  border-bottom: none;
 }
 
 .control-group {
@@ -220,27 +240,56 @@ input[type="number"] {
   cursor: pointer;
 }
 
+/* 3D/2Dはトグルで排他表示（issue: モバイルで同時表示すると操作しづらいため） */
 .views {
   display: flex;
+  flex-direction: column;
   flex: 1;
   overflow: hidden;
   position: relative;
 }
 
-.view-3d {
-  flex: 1;
+.view-toggle {
   display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  position: relative;
-}
-
-.view-right {
-  width: 300px;
-  display: flex;
-  flex-direction: column;
-  border-left: 1px solid #2a2a4a;
   flex-shrink: 0;
+  gap: 3px;
+  margin: 8px;
+  padding: 3px;
+  background: #0d0d2b;
+  border: 1px solid #2a2a4a;
+  border-radius: 8px;
+}
+
+.view-toggle-btn {
+  flex: 1;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  color: #7080a0;
+  padding: 7px;
+  min-height: 40px;
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+
+.view-toggle-btn.active {
+  color: #a0c0ff;
+  background: #2a3a6e;
+}
+
+.views .view-3d,
+.views .view-2d {
+  display: none;
+  flex: 1;
+  overflow: hidden;
+}
+
+.views .view-3d.active,
+.views .view-2d.active {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  position: relative;
 }
 
 .view-title {
@@ -253,6 +302,22 @@ input[type="number"] {
   display: flex;
   align-items: center;
   justify-content: space-between;
+}
+
+/* 3D/2Dはトグルボタン自体がラベルを兼ねるため、操作ボタンだけをcanvas右上に重ねる */
+.view-actions {
+  position: absolute;
+  top: max(8px, env(safe-area-inset-top));
+  right: max(8px, env(safe-area-inset-right));
+  z-index: 1;
+  display: flex;
+  gap: 6px;
+}
+
+.view-actions .fullscreen-btn {
+  width: 40px;
+  height: 40px;
+  font-size: 1rem;
 }
 
 .view-title-actions {
@@ -283,6 +348,69 @@ input[type="number"] {
   color: #a0c0ff;
 }
 
+/* コンパスFAB: Googleマップのコンパスに倣い、他の操作ボタンから独立した
+   単独の円形ボタンとして右下に配置。ONの間は針が実際のデバイス方位に回転する */
+.compass-fab {
+  position: absolute;
+  right: max(12px, env(safe-area-inset-right));
+  bottom: max(12px, env(safe-area-inset-bottom));
+  z-index: 1;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border-radius: 50%;
+  background: #12122e;
+  border: 1px solid #2a2a4a;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.compass-fab-icon {
+  width: 26px;
+  height: 26px;
+  transition: transform 0.15s ease-out;
+}
+
+.compass-fab-ring {
+  fill: none;
+  stroke: #3a4a70;
+  stroke-width: 1;
+}
+
+.compass-fab-tick {
+  fill: #4a5a80;
+}
+
+.compass-fab-needle-n {
+  fill: #e6392e;
+}
+
+.compass-fab-needle-s {
+  fill: #c8d0e0;
+}
+
+.compass-fab-pivot {
+  fill: #0d0d2b;
+  stroke: #c8d0e0;
+  stroke-width: 0.6;
+}
+
+.compass-fab.active {
+  background: #1a2350;
+  border-color: #3a5a9e;
+}
+
+.compass-fab.active .compass-fab-ring {
+  stroke: #5070a0;
+}
+
+.compass-fab.active .compass-fab-tick {
+  fill: #7090c0;
+}
+
 /* フルスクリーン中のスタイル */
 main:fullscreen {
   display: flex;
@@ -305,37 +433,19 @@ main:fullscreen .scale-view {
   overflow: hidden;
 }
 
-/* 3Dフルスクリーン: view-rightを非表示 */
-main[data-fs="view3d"]:fullscreen .view-right {
+/* フルスクリーン中はトグル・情報パネルを隠し、表示中のビューだけをフル表示 */
+main:fullscreen .view-toggle,
+main:fullscreen .info-panel {
   display: none;
-}
-main[data-fs="view3d"]:fullscreen .view-3d {
-  flex: 1;
 }
 
-/* 2Dフルスクリーン: view-3dを非表示、view-rightをフル幅 */
-main[data-fs="view2d"]:fullscreen .view-3d {
-  display: none;
-}
-main[data-fs="view2d"]:fullscreen .view-right {
-  width: 100%;
-  border-left: none;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-}
 main[data-fs="view2d"]:fullscreen .view-2d {
-  flex: 1;
-  border-bottom: none;
   align-items: center;
   justify-content: center;
 }
 main[data-fs="view2d"]:fullscreen #canvas2d {
   width: min(80vh, 80vw) !important;
   height: min(80vh, 80vw) !important;
-}
-main[data-fs="view2d"]:fullscreen .info-panel {
-  display: none;
 }
 
 .sky-view {
@@ -421,21 +531,19 @@ main[data-fs="view2d"]:fullscreen .info-panel {
 }
 
 .view-2d {
-  border-bottom: 1px solid #2a2a4a;
-  display: flex;
-  flex-direction: column;
   align-items: center;
-  padding-bottom: 8px;
-  flex-shrink: 0;
+  justify-content: center;
+  padding: 12px;
 }
 
 #canvas2d {
-  margin-top: 6px;
+  width: min(70vh, 90vw, 420px);
+  height: min(70vh, 90vw, 420px);
 }
 
 .info-panel {
-  flex: 1;
-  overflow-y: auto;
+  flex-shrink: 0;
+  border-top: 1px solid #2a2a4a;
 }
 
 #info-table {
@@ -697,22 +805,8 @@ main[data-fs="view2d"]:fullscreen .info-panel {
     font-size: 0.82rem;
   }
 
-  .toggle-controls {
-    display: block;
-  }
-
-  /* 設定の折りたたみ */
   .controls {
-    overflow: hidden;
-    max-height: 300px;
-    transition: max-height 0.25s ease, padding 0.25s ease;
     padding: 6px 12px;
-  }
-
-  .controls.collapsed {
-    max-height: 0;
-    padding-top: 0;
-    padding-bottom: 0;
   }
 
   .control-group {
@@ -762,59 +856,10 @@ main[data-fs="view2d"]:fullscreen .info-panel {
     gap: 3px;
   }
 
-  /* views: 縦スクロール */
-  .views {
-    flex-direction: column;
-    overflow: visible;
-    flex: none;
-  }
-
-  /* 3D天球: 画面幅いっぱい・高さを大きく */
-  .view-3d {
-    flex: none;
-    height: 90vw;
-    max-height: 420px;
-    width: 100%;
-  }
-
-  /* view-right: 縦積み・フル幅 */
-  .view-right {
-    width: 100%;
-    border-left: none;
-    border-top: 1px solid #2a2a4a;
-    flex-direction: column;
-  }
-
-  /* 2D方位図: 大きく */
-  .view-2d {
-    border-right: none;
-    border-bottom: 1px solid #2a2a4a;
-    align-items: center;
-    flex-shrink: 0;
-  }
-
-  #canvas2d {
-    width: min(280px, 80vw);
-    height: min(280px, 80vw);
-    margin-top: 6px;
-    margin-bottom: 6px;
-  }
-
-  .info-panel {
-    overflow-y: visible;
-  }
-
   #info-table th,
   #info-table td {
     padding: 6px 10px;
     font-size: 0.82rem;
-  }
-}
-
-@media (max-width: 600px) and (orientation: landscape) {
-  .view-3d {
-    height: 55vw;
-    max-height: 300px;
   }
 }
 
@@ -837,22 +882,9 @@ main[data-fs="view2d"]:fullscreen .info-panel {
     font-size: 0.82rem;
   }
 
-  .toggle-controls {
-    display: block;
-  }
-
   .controls {
-    overflow: hidden;
-    max-height: 220px;
-    transition: max-height 0.25s ease, padding 0.25s ease;
     padding: 5px 12px;
     flex-wrap: wrap;
-  }
-
-  .controls.collapsed {
-    max-height: 0;
-    padding-top: 0;
-    padding-bottom: 0;
   }
 
   .control-group {
@@ -880,41 +912,9 @@ main[data-fs="view2d"]:fullscreen .info-panel {
     gap: 8px;
   }
 
-  /* 横向きは左右並び維持 */
-  .views {
-    flex-direction: row;
-    overflow: visible;
-    flex: none;
-  }
-
-  .view-3d {
-    flex: 1;
-    height: calc(100vw * 0.55);
-    max-height: 340px;
-    min-height: 160px;
-  }
-
-  .view-right {
-    width: 260px;
-    border-left: 1px solid #2a2a4a;
-    flex-direction: column;
-    flex-shrink: 0;
-  }
-
-  .view-2d {
-    border-bottom: 1px solid #2a2a4a;
-    align-items: center;
-  }
-
   #canvas2d {
-    width: 160px;
-    height: 160px;
-    margin: 4px 0;
-  }
-
-  .info-panel {
-    overflow-y: auto;
-    flex: 1;
+    width: min(50vh, 60vw);
+    height: min(50vh, 60vw);
   }
 
   #info-table th,

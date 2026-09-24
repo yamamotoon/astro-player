@@ -6,6 +6,7 @@ import { getAstroData, formatTime } from './astroCalc'
 import { ARView } from './ar'
 import { ScaleModel3D, type ScaleModelConfig } from './scaleModel3d'
 import { PlaybackController } from './playbackController'
+import { CompassHeadingTracker } from './compassHeading'
 
 type SceneName = 'menu' | 'dashboard' | 'sky' | 'scale'
 
@@ -99,8 +100,8 @@ const sceneDashboard = document.getElementById('scene-dashboard') as HTMLElement
 const sceneSky = document.getElementById('scene-sky') as HTMLElement
 const sceneScale = document.getElementById('scene-scale') as HTMLElement
 const constToggles = document.getElementById('const-toggles') as HTMLElement
-const backNav = document.getElementById('back-nav') as HTMLElement
 const backToMenuBtn = document.getElementById('back-to-menu-btn') as HTMLButtonElement
+const toggleControlsBtn = document.getElementById('toggle-controls') as HTMLButtonElement
 const menuDashboardBtn = document.getElementById('menu-dashboard-btn') as HTMLButtonElement
 const menuSkyBtn = document.getElementById('menu-sky-btn') as HTMLButtonElement
 const menuScaleBtn = document.getElementById('menu-scale-btn') as HTMLButtonElement
@@ -124,7 +125,8 @@ function showScene(name: SceneName) {
   sceneScale.style.display = name === 'scale' ? '' : 'none'
   scalePlayback.style.display = name === 'scale' ? '' : 'none'
   constToggles.style.display = name === 'dashboard' ? '' : 'none'
-  backNav.hidden = name === 'menu'
+  backToMenuBtn.hidden = name === 'menu'
+  toggleControlsBtn.hidden = !showHud
   if (name !== 'sky') arView.stop()
   if (document.fullscreenElement) document.exitFullscreen()
   if (name === 'dashboard') {
@@ -136,7 +138,104 @@ function showScene(name: SceneName) {
   }
 }
 
-menuDashboardBtn.addEventListener('click', () => showScene('dashboard'))
+// ---- 3D/2D 表示切り替え（同時表示だとモバイルで操作しづらいため排他表示） ----
+const viewEl3d = document.querySelector('#scene-dashboard .view-3d') as HTMLElement
+const viewEl2d = document.querySelector('#scene-dashboard .view-2d') as HTMLElement
+const viewToggle3dBtn = document.getElementById('view-toggle-3d') as HTMLButtonElement
+const viewToggle2dBtn = document.getElementById('view-toggle-2d') as HTMLButtonElement
+type DashboardView = '3d' | '2d'
+let activeDashboardView: DashboardView = '3d'
+
+function setDashboardView(view: DashboardView) {
+  activeDashboardView = view
+  viewEl3d.classList.toggle('active', view === '3d')
+  viewEl2d.classList.toggle('active', view === '2d')
+  viewToggle3dBtn.classList.toggle('active', view === '3d')
+  viewToggle2dBtn.classList.toggle('active', view === '2d')
+  if (view === '3d') {
+    requestAnimationFrame(() => scene3d.handleResize())
+  }
+  // 非表示側のビューでデバイス方位センサーを回し続けない
+  if (view !== '3d') setCompassEnabled('3d', false)
+  if (view !== '2d') setCompassEnabled('2d', false)
+}
+
+viewToggle3dBtn.addEventListener('click', () => setDashboardView('3d'))
+viewToggle2dBtn.addEventListener('click', () => setDashboardView('2d'))
+
+// ---- 方位磁石モード: デバイスの向きに3D/2Dビューを連動させる ----
+const compassToggle3dBtn = document.getElementById('compass-toggle-3d') as HTMLButtonElement
+const compassToggle2dBtn = document.getElementById('compass-toggle-2d') as HTMLButtonElement
+const compassIcon3d = compassToggle3dBtn.querySelector('.compass-fab-icon') as SVGElement
+const compassIcon2d = compassToggle2dBtn.querySelector('.compass-fab-icon') as SVGElement
+let compassHeadingDeg = 0
+let compass3dEnabled = false
+let compass2dEnabled = false
+let compassTracker: CompassHeadingTracker | null = null
+
+function isCompassActive(): boolean {
+  return compass3dEnabled || compass2dEnabled
+}
+
+// 針は「北」を指し続ける。画面(headingDeg方向を正面)がheadingDeg分回転して
+// 見えているぶん、北を指す針は見た目上その逆方向へ回転させる
+function applyCompassNeedleRotation() {
+  const rotate = `rotate(${-compassHeadingDeg}deg)`
+  if (compass3dEnabled) compassIcon3d.style.transform = rotate
+  if (compass2dEnabled) compassIcon2d.style.transform = rotate
+}
+
+async function setCompassEnabled(view: DashboardView, enabled: boolean) {
+  const btn = view === '3d' ? compassToggle3dBtn : compassToggle2dBtn
+  const icon = view === '3d' ? compassIcon3d : compassIcon2d
+  if (view === '3d') {
+    compass3dEnabled = enabled
+    // ONの間はOrbitControlsの水平ドラッグを無効化する（手動で回すとコンパス角と
+    // 取り合いになりガクつくため）。上下方向のドラッグは引き続き許可する
+    scene3d.setCompassLocked(enabled)
+  } else {
+    compass2dEnabled = enabled
+  }
+  btn.classList.toggle('active', enabled)
+  btn.setAttribute('aria-pressed', String(enabled))
+  if (!enabled) icon.style.transform = ''
+
+  if (isCompassActive() && !compassTracker) {
+    const tracker = new CompassHeadingTracker((heading) => {
+      compassHeadingDeg = heading
+      if (compass3dEnabled) scene3d.setCompassHeading(compassHeadingDeg)
+      if (compass2dEnabled) update()
+      applyCompassNeedleRotation()
+    })
+    const ok = await tracker.start()
+    if (!ok) {
+      alert(getLang() === 'ja'
+        ? 'センサーの使用が許可されませんでした。'
+        : 'Sensor access was not granted.')
+      if (view === '3d') {
+        compass3dEnabled = false
+        scene3d.setCompassLocked(false)
+      } else {
+        compass2dEnabled = false
+      }
+      btn.classList.remove('active')
+      btn.setAttribute('aria-pressed', 'false')
+      return
+    }
+    compassTracker = tracker
+  } else if (!isCompassActive() && compassTracker) {
+    compassTracker.stop()
+    compassTracker = null
+  }
+}
+
+compassToggle3dBtn.addEventListener('click', () => setCompassEnabled('3d', !compass3dEnabled))
+compassToggle2dBtn.addEventListener('click', () => setCompassEnabled('2d', !compass2dEnabled))
+
+menuDashboardBtn.addEventListener('click', () => {
+  showScene('dashboard')
+  setDashboardView(activeDashboardView)
+})
 menuSkyBtn.addEventListener('click', () => {
   // ジェスチャーを保持したまま同じクリックハンドラ内で開始する
   // （iOS Safariのジャイロ許可はユーザー操作から直接呼ばないと通らないため）
@@ -174,13 +273,9 @@ function update() {
 
   const data = getAstroData(date, lat, lng)
   scene3d.update(data)
-  compass2d.draw(data)
+  compass2d.draw(data, compass2dEnabled ? compassHeadingDeg : 0)
   arView.setData(data, lat, lng, date)
 
-  setText('sun-az', `${data.sun.azimuthDeg.toFixed(1)}°`)
-  setText('sun-alt', `${data.sun.altitudeDeg.toFixed(1)}°`)
-  setText('moon-az', `${data.moon.azimuthDeg.toFixed(1)}°`)
-  setText('moon-alt', `${data.moon.altitudeDeg.toFixed(1)}°`)
   setText('sun-rise', formatTime(data.sunTimes.sunrise))
   setText('sun-set', formatTime(data.sunTimes.sunset))
   setText('moon-rise', formatTime(data.moonRise))
@@ -268,7 +363,6 @@ document.addEventListener('fullscreenchange', () => {
 })
 
 // ---- 設定パネル 折りたたみ ----
-const toggleControlsBtn = document.getElementById('toggle-controls') as HTMLButtonElement
 const controlsSection = document.querySelector('.controls') as HTMLElement
 
 function refreshToggleBtn() {
