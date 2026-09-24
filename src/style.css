@@ -172,6 +172,10 @@ header h1 {
   align-items: center;
 }
 
+.toggle-controls[hidden] {
+  display: none;
+}
+
 /* 情報過多を避けるため既定で折りたたみ。開閉は#toggle-controlsボタンで操作する */
 .controls {
   display: flex;
@@ -622,11 +626,13 @@ main[data-fs="view2d"]:fullscreen #canvas2d {
 }
 
 /* NOWボタン: モードは変えず、シミュレーション時刻だけを現在時刻に戻す。
-   押した時だけ意味がある操作なので、常時目立つ色にして発見性を上げる */
+   今すでにNOWと表示上一致している間は押しても意味がないため控えめな見た目にし、
+   時刻をずらして「今とは違う時刻を見ている」状態になった時だけ目立たせる
+   （.now-btn-active、main.tsのcreateSimPlaybackController参照） */
 .now-btn {
   background: transparent;
-  border: 1px solid #3a5a9e;
-  color: #a0c0ff;
+  border: 1px solid #2a2a4a;
+  color: #5a6a90;
   font-size: 0.8rem;
   font-weight: 600;
   padding: 8px 14px;
@@ -638,6 +644,11 @@ main[data-fs="view2d"]:fullscreen #canvas2d {
 
 .now-btn:hover {
   background: #1a2a4a;
+}
+
+.now-btn.now-btn-active {
+  border-color: #3a5a9e;
+  color: #a0c0ff;
 }
 
 .scale-seekbar-label {

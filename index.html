@@ -60,12 +60,6 @@
           </div>
         </div>
         <div class="control-group">
-          <label data-i18n="datetime">日時</label>
-          <input type="datetime-local" id="datetime">
-          <label class="realtime-label">
-            <input type="checkbox" id="realtime" checked>
-            <span data-i18n="realtime">リアルタイム更新</span>
-          </label>
           <span id="const-toggles">
             <label class="realtime-label">
               <input type="checkbox" id="show-constellations">
@@ -130,11 +124,10 @@
 
     <!-- SKY シーン -->
     <section id="scene-sky" class="sky-view" style="display: none">
-      <div class="view-title">
-        <span data-i18n="view-sky">SKY（ジャイロで天球内を見る）</span>
-        <button class="fullscreen-btn" data-target="skyview" title="フルスクリーン" data-i18n-title="fullscreen-title">⛶</button>
-      </div>
       <div id="ar-panel" class="ar-panel">
+        <div class="view-actions">
+          <button class="fullscreen-btn" data-target="skyview" title="フルスクリーン" data-i18n-title="fullscreen-title">⛶</button>
+        </div>
         <video id="ar-video" hidden></video>
         <canvas id="ar-canvas" class="ar-canvas"></canvas>
         <div class="ar-hud">

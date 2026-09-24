@@ -3,9 +3,9 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { t } from './i18n'
 import earthTextureUrl from './assets/earth-texture.png'
 import moonTextureUrl from './assets/moon-texture.png'
-import { PlaybackController } from './playbackController'
+import { createSimPlaybackController, type SimMode, type SimPlaybackController } from './simPlayback'
 import {
-  DAY_MS, dayOfYearFraction, orbitalAngleFromEpoch, subsolarLonRad, localDirForLon, localDirForLatLon,
+  dayOfYearFraction, orbitalAngleFromEpoch, subsolarLonRad, localDirForLon, localDirForLatLon,
   computeOrbitalPositions, type InnerPlanetKey, INNER_PLANET_KEYS,
   MOON_R, EARTH_R, SUN_R, MERCURY_R, VENUS_R, MARS_R,
   EARTH_MOON_DIST, EARTH_SUN_DIST,
@@ -40,7 +40,6 @@ const DEFORM_SATELLITE_ORBIT_RADIUS: Partial<Record<BodyKey, number>> = {
   sun: DEFORM_SUN_EARTH_DIST,
   earth: DEFORM_EARTH_MOON_DIST,
 }
-export type SimMode = 'day' | 'month' | 'year'
 
 // 各モード（既存の「スケール」／地球の公転ビューア／地球の自転ビューア）は独立させ、
 // 同時に複数インスタンスを存在させない前提にする（呼び出し側がモード切替のたびに
@@ -98,22 +97,9 @@ export class ScaleModel3D {
   // カメラ情報の常時表示UI（テキスト）
   private debugHudEl = document.getElementById('scale-debug-hud')
 
-  // 時間バー（日/月/年切り替え・シークバー・再生/停止。issue #004）
-  private modeButtons = {
-    day: document.getElementById('scale-mode-day') as HTMLButtonElement,
-    month: document.getElementById('scale-mode-month') as HTMLButtonElement,
-    year: document.getElementById('scale-mode-year') as HTMLButtonElement,
-  }
-  private playbackPlayBtn = document.getElementById('scale-play-btn') as HTMLButtonElement
-  private playbackNowBtn = document.getElementById('scale-now-btn') as HTMLButtonElement
-  private playbackSeekbar = document.getElementById('scale-seekbar') as HTMLInputElement
-  private playbackDateLabel = document.getElementById('scale-sim-date-label') as HTMLElement
-  private static readonly SEEKBAR_MAX = 1000
-
-  // ---- ステップ再生（issue-009。時/日/月の3段を常時表示し、シーク範囲に縛られず時刻を移動する） ----
-  private static readonly STEP_DELTA_MS: Record<'hour' | 'day' | 'month', number> = {
-    hour: 60 * 60 * 1000, day: 24 * 60 * 60 * 1000, month: 30 * 24 * 60 * 60 * 1000,
-  }
+  // 時間バー（日/月/年切り替え・シークバー・再生/停止。simPlayback.ts参照。3D+2D/SKYと共通実装）。
+  // dispose()で必ず止める（モード切替のたびに作り直す運用のため。issue #004/#008）
+  private simPlaybackController!: SimPlaybackController
 
   // 画面上部中央に常時表示する、現在シミュレーションしている日時（シークバー横の小さいラベルとは別）
   private dateHudEl = document.getElementById('scale-date-hud') as HTMLElement
@@ -138,8 +124,6 @@ export class ScaleModel3D {
     this.cleanupFns.push(() => target.removeEventListener(type, handler))
   }
 
-  // このインスタンスで表示するモード（ScaleModelConfig.availableModes）。時間バーのボタン表示に使う
-  private availableModes: SimMode[] = ['day', 'month', 'year']
   // 水星・金星・火星を表示するか（ScaleModelConfig.showInnerPlanets）。activeBodyKeys()が
   // ラベル・当たり判定・軌道円などループ対象を絞るのに使う唯一の分岐点
   private showInnerPlanets = false
@@ -192,37 +176,23 @@ export class ScaleModel3D {
   private innerPlanetOrbitLineByKey: Partial<Record<BodyKey, THREE.LineLoop>> = {}
 
   // ---- 時間連動（自転・公転・シークバー） ----
-  // シークバーの起点(0%)は常に「モードに入った時点の実時刻」。そこから未来方向にのみ進む
-  // （モード切り替えのたびに現在時刻へリセットする。issue #004参照）
-  private simAnchorDate = new Date()
-  private simMode: SimMode = 'day'
-  private playback = new PlaybackController(ScaleModel3D.SIM_PERIOD_MS.day, ScaleModel3D.SIM_REAL_DURATION_MS)
+  // 実際の時間管理(モード切替・再生・シーク)はsimPlaybackController(simPlayback.ts)が持つ。
+  // ここではレンダリングループが毎フレーム参照できるよう、直近の値をキャッシュしておくだけ
+  private currentSimDateValue = new Date()
   // 地球の地軸傾斜の基準姿勢（EARTH_AXIS方向にローカルY軸を向けた回転）。毎フレームこれに
   // その時点の自転角度を合成して絶対的な向きを求める（フレーム差分の累積だと、シークバーで
   // 巻き戻した時に正しい向きに戻せないため）
   private earthTiltQuaternion = new THREE.Quaternion()
   private earthAxisLine!: THREE.Line
 
-  private static readonly SIM_PERIOD_MS: Record<SimMode, number> = {
-    day: DAY_MS,
-    month: 30 * DAY_MS,
-    year: 365 * DAY_MS,
-  }
-  // 日/月/年どのモードも、既存の24hシミュレーションと同じ体感速度（1周期を24秒で再生）に揃える
-  private static readonly SIM_REAL_DURATION_MS = 24_000
-
   constructor(canvas: HTMLCanvasElement, config: ScaleModelConfig) {
-    // configをフィールドへ反映するのは、下のcomputeOrbitalPositions()（deformModeを見る）や
-    // 時間バーの初期化より前でなければならない
-    this.availableModes = config.availableModes
+    // configをフィールドへ反映するのは、下のcomputeOrbitalPositions()（deformModeを見る）より前
     this.deformMode = config.deformDefault
-    this.simMode = config.defaultMode
     this.targetBody = config.defaultTarget
     this.showInnerPlanets = config.showInnerPlanets ?? false
-    this.playback.setPeriod(ScaleModel3D.SIM_PERIOD_MS[config.defaultMode])
 
     // カメラの初期位置がEARTH_POSを参照するため、メッシュ等を作る前に一度、実際の現在時刻
-    // (simAnchorDate、フィールド初期化子で既に設定済み)に基づく公転位置を計算しておく
+    // (currentSimDateValue、フィールド初期化子で既に設定済み)に基づく公転位置を計算しておく
     computeOrbitalPositions(this.currentSimDate(), this.deformMode)
 
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true })
@@ -541,29 +511,17 @@ export class ScaleModel3D {
     this.on(this.deformToggleBtn, 'click', () => this.toggleDeformMode())
     this.updateDeformButtonUI()
 
-    // 時間バー: 日/月/年切り替え・シークバー・再生/停止（issue #004）。availableModesに
-    // 含まれないモードのボタンはこのインスタンスでは隠す（例: 地球の公転ビューアには「日」を出さない）
-    for (const key of ['day', 'month', 'year'] as const) {
-      const btn = this.modeButtons[key]
-      btn.hidden = !this.availableModes.includes(key)
-      this.on(btn, 'click', () => this.setSimMode(key))
-    }
-    this.on(this.playbackPlayBtn, 'click', () => this.togglePlayback())
-    this.on(this.playbackNowBtn, 'click', () => this.resetToNow())
-    this.on(this.playbackSeekbar, 'input', () => {
-      // 手動でシークバーを動かしたら再生を止める（既存の24hシミュレーションと同じ挙動）
-      this.playback.pause()
-      this.playback.seekFraction(parseInt(this.playbackSeekbar.value, 10) / ScaleModel3D.SEEKBAR_MAX)
-    })
-
-    // ステップ再生（issue-009）: シーク範囲に縛られず時刻そのものを進退させる
-    for (const btn of document.querySelectorAll<HTMLButtonElement>('#scale-step-back-b .step-btn, #scale-step-fwd-b .step-btn')) {
-      const unit = btn.dataset.unit as 'hour' | 'day' | 'month'
-      const dir = Number(btn.dataset.dir)
-      this.on(btn, 'click', () => this.stepAnchorBy(ScaleModel3D.STEP_DELTA_MS[unit] * dir))
-    }
-
-    this.updatePlaybackUI() // ボタンの見た目・シークバー・ラベルを初期状態に同期する
+    // 時間バー: 日/月/年切り替え・シークバー・再生/停止（issue #004）。3D+2D/SKYと共通の
+    // コンポーネント(simPlayback.ts)を使う。availableModesに含まれないモードのボタンは
+    // このインスタンスでは隠す（例: 地球の公転ビューアには「日」を出さない）
+    this.simPlaybackController = createSimPlaybackController(
+      'scale',
+      (date) => {
+        this.currentSimDateValue = date
+        this.dateHudEl.textContent = ScaleModel3D.formatSimDateFull(date)
+      },
+      { defaultMode: config.defaultMode, availableModes: config.availableModes }
+    )
 
     this.handleResize()
 
@@ -736,9 +694,11 @@ export class ScaleModel3D {
   }
 
   // ---- 時間連動（自転・公転・シークバー。issue #004） ----
+  // 実際の時間進行の管理はsimPlaybackController(simPlayback.ts)が持つ。ここではレンダリング
+  // ループが毎フレーム参照する値(currentSimDateValue)を返すだけ
 
   private currentSimDate(): Date {
-    return new Date(this.simAnchorDate.getTime() + this.playback.elapsedMilliseconds)
+    return this.currentSimDateValue
   }
 
   // 自転角度の基準（EARTH_AXIS周りの角度を測るための、軸に直交する2つの基準ベクトル）。
@@ -798,84 +758,11 @@ export class ScaleModel3D {
     this.earthMesh.quaternion.copy(spinQuat).multiply(this.earthTiltQuaternion)
   }
 
-  /** 日/月/年モードを切り替える。シークバーは常に現在時刻を起点に先頭へリセットする */
-  setSimMode(mode: SimMode) {
-    this.simMode = mode
-    this.resetToNow()
-  }
-
-  /** モードは変えず、シミュレーション時刻だけを現在時刻に戻す（NOWボタン） */
-  resetToNow() {
-    this.simAnchorDate = new Date()
-    this.playback.setPeriod(ScaleModel3D.SIM_PERIOD_MS[this.simMode])
-    this.playback.reset()
-  }
-
-  /**
-   * ステップ再生（issue-009）: シークバーの範囲に縛られず「今の時刻」そのものを±deltaMs動かす。
-   * シークバーの手動シーク（起点(モードに入った時点)〜終端(起点+周期)の中でしかクランプ移動でき
-   * ない）とは違い、simAnchorDate自体をずらすことで、どれだけステップしても際限なく時間移動
-   * できるようにする。シークバー上の位置(elapsedMs)はリセットして常に「新しい今」を起点(0%)から見せる
-   */
-  private stepAnchorBy(deltaMs: number) {
-    this.playback.pause()
-    this.simAnchorDate = new Date(this.simAnchorDate.getTime() + deltaMs)
-    this.playback.reset()
-  }
-
-  get currentSimMode(): SimMode {
-    return this.simMode
-  }
-
-  togglePlayback() {
-    this.playback.togglePlay()
-  }
-
-  get isPlaybackPlaying(): boolean {
-    return this.playback.isPlaying
-  }
-
-  seekPlaybackFraction(f: number) {
-    this.playback.seekFraction(f)
-  }
-
-  get playbackFraction(): number {
-    return this.playback.fraction
-  }
-
-  /** UI表示用: 現在シミュレーションしている日時 */
-  get simulatedDate(): Date {
-    return this.currentSimDate()
-  }
-
-  /** 日モードは日時まで、月/年モードは日付までを表示する（分単位は誤差の範囲で意味が薄いため） */
-  private static formatSimDate(date: Date, mode: SimMode): string {
-    const pad = (n: number) => String(n).padStart(2, '0')
-    const dateStr = `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
-    if (mode === 'day') return `${dateStr} ${pad(date.getHours())}:${pad(date.getMinutes())}`
-    return dateStr
-  }
-
   /** 画面上部の常時表示HUD用: 「今どの時点の天体を見ているか」を明確にするため、モードに関わらず
-   *  常に時刻まで表示する（formatSimDate()は下部シークバー横の小さいラベル用で役割が異なる） */
+   *  常に時刻まで表示する（simPlayback.ts側の下部シークバー横ラベルとは役割が異なる） */
   private static formatSimDateFull(date: Date): string {
     const pad = (n: number) => String(n).padStart(2, '0')
     return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`
-  }
-
-  /** 時間バー(モードボタンの見た目・シークバーの位置・再生ボタンのアイコン・日時ラベル)を毎フレーム同期する */
-  private updatePlaybackUI() {
-    for (const key of ['day', 'month', 'year'] as const) {
-      this.modeButtons[key].classList.toggle('active', key === this.simMode)
-    }
-    this.playbackPlayBtn.textContent = this.playback.isPlaying ? '⏸' : '▶'
-    // 常にplayback.fractionをそのまま反映する。ユーザーのドラッグ('input'イベント)は既に
-    // playback.seekFraction()へ即時反映済みなので、ここでの同期は既存の値をなぞるだけで
-    // 競合しない。再生中の進行だけでなく、モード切り替え直後のリセット(→0)もこれで反映される
-    this.playbackSeekbar.value = String(Math.round(this.playback.fraction * ScaleModel3D.SEEKBAR_MAX))
-    const simDate = this.currentSimDate()
-    this.playbackDateLabel.textContent = ScaleModel3D.formatSimDate(simDate, this.simMode)
-    this.dateHudEl.textContent = ScaleModel3D.formatSimDateFull(simDate)
   }
 
   // ラベルの当たり判定は常に画面上一定サイズの箱として扱う（本体をタップするより少し広めに取り、
@@ -1462,15 +1349,13 @@ export class ScaleModel3D {
   }
 
   private startLoop() {
-    let lastTime: number | null = null
-    const loop = (time: number) => {
+    const loop = () => {
       this.rafId = requestAnimationFrame(loop)
-      const dt = lastTime === null ? 0 : (time - lastTime) / 1000
-      lastTime = time
-      this.playback.tick(dt)
+      // 時間の進行自体はsimPlaybackController(simPlayback.ts)が独自のrAFループで管理しており、
+      // currentSimDateValueはそのonDateChangeコールバックで更新される（constructor参照）。
+      // ここでは毎フレーム、その時点の値を使って天体の姿勢を再計算するだけでよい
       const earthOrbitAngle = computeOrbitalPositions(this.currentSimDate(), this.deformMode)
       this.syncSceneToOrbitalState(earthOrbitAngle)
-      this.updatePlaybackUI()
       this.updateCameraTracking()
       this.controls.update()
       this.updateLabels()
@@ -1497,6 +1382,7 @@ export class ScaleModel3D {
     canvas.removeEventListener('pointercancel', this.onPointerCancel)
     for (const cleanup of this.cleanupFns) cleanup()
     this.cleanupFns = []
+    this.simPlaybackController.dispose()
 
     ScaleModel3D.disposeObject3D(this.scene)
     ScaleModel3D.disposeObject3D(this.gizmoScene)

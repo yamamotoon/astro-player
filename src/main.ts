@@ -5,25 +5,22 @@ import { Compass2D } from './compass2d'
 import { getAstroData } from './astroCalc'
 import { ARView } from './ar'
 import { ScaleModel3D, type ScaleModelConfig } from './scaleModel3d'
-import { PlaybackController } from './playbackController'
+import { createSimPlaybackController } from './simPlayback'
 import { CompassHeadingTracker } from './compassHeading'
 
 type SceneName = 'menu' | 'dashboard' | 'sky' | 'scale'
 
 const latInput = document.getElementById('lat') as HTMLInputElement
 const lngInput = document.getElementById('lng') as HTMLInputElement
-const datetimeInput = document.getElementById('datetime') as HTMLInputElement
-const realtimeCheck = document.getElementById('realtime') as HTMLInputElement
 const constCheck = document.getElementById('show-constellations') as HTMLInputElement
 const famousCheck = document.getElementById('show-famous') as HTMLInputElement
 const trianglesCheck = document.getElementById('show-triangles') as HTMLInputElement
 
-function toDatetimeLocal(d: Date): string {
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+function getLatLng() {
+  const lat = parseFloat(latInput.value) || 35.6762
+  const lng = parseFloat(lngInput.value) || 139.6503
+  return { lat, lng }
 }
-
-datetimeInput.value = toDatetimeLocal(new Date())
 
 const canvas3d = document.getElementById('canvas3d') as HTMLCanvasElement
 const scene3d = new Scene3D(canvas3d)
@@ -78,13 +75,6 @@ function enterScaleMode(config: ScaleModelConfig, titleKey: string) {
 
 const scaleFitBtn = document.getElementById('scale-fit-btn') as HTMLButtonElement
 scaleFitBtn.addEventListener('click', () => scaleModel?.frameAll())
-
-function getSettings() {
-  const lat = parseFloat(latInput.value) || 35.6762
-  const lng = parseFloat(lngInput.value) || 139.6503
-  const date = realtimeCheck.checked ? new Date() : new Date(datetimeInput.value)
-  return { lat, lng, date }
-}
 
 // ---- シーン切り替え（メニュー / 3D+2D / SKY / スケールモデル） ----
 const sceneMenu = document.getElementById('scene-menu') as HTMLElement
@@ -201,7 +191,7 @@ async function setCompassEnabled(view: DashboardView, enabled: boolean) {
     const tracker = new CompassHeadingTracker((heading) => {
       compassHeadingDeg = heading
       if (compass3dEnabled) scene3d.setCompassHeading(compassHeadingDeg)
-      if (compass2dEnabled) update()
+      if (compass2dEnabled) updateDashboard(dashboardCurrentDate)
       applyCompassNeedleRotation()
     })
     const ok = await tracker.start()
@@ -246,20 +236,17 @@ backToMenuBtn.addEventListener('click', () => showScene('menu'))
 
 // ---- 天体位置の共通更新処理 ----
 const langBtn = document.getElementById('lang-btn') as HTMLButtonElement
-const DAY_MS = 24 * 60 * 60 * 1000
 
-function update() {
-  const { lat, lng, date } = getSettings()
-  if (isNaN(date.getTime())) return
+// 3D+2D画面が今見ている日時（createSimPlaybackController('dashboard')が管理）。
+// lat/lng変更時にその場で再描画するため、直近の値をここに保持する
+let dashboardCurrentDate = new Date()
 
-  if (realtimeCheck.checked) {
-    datetimeInput.value = toDatetimeLocal(date)
-  }
-
+function updateDashboard(date: Date) {
+  dashboardCurrentDate = date
+  const { lat, lng } = getLatLng()
   const data = getAstroData(date, lat, lng)
   scene3d.update(data)
   compass2d.draw(data, compass2dEnabled ? compassHeadingDeg : 0)
-  arView.setData(data, lat, lng, date)
 
   if (constCheck.checked) {
     scene3d.updateConstellations(lat, lng, date)
@@ -272,47 +259,36 @@ function update() {
   }
 }
 
-latInput.addEventListener('input', update)
-lngInput.addEventListener('input', update)
-datetimeInput.addEventListener('input', update)
-realtimeCheck.addEventListener('change', update)
+// SKY画面が今見ている日時（createSimPlaybackController('sky')が管理）
+let skyCurrentDate = new Date()
+
+function updateSky(date: Date) {
+  skyCurrentDate = date
+  const { lat, lng } = getLatLng()
+  const data = getAstroData(date, lat, lng)
+  arView.setData(data, lat, lng, date)
+}
+
+latInput.addEventListener('input', () => {
+  updateDashboard(dashboardCurrentDate)
+  updateSky(skyCurrentDate)
+})
+lngInput.addEventListener('input', () => {
+  updateDashboard(dashboardCurrentDate)
+  updateSky(skyCurrentDate)
+})
 constCheck.addEventListener('change', () => {
   scene3d.setConstellationsVisible(constCheck.checked)
-  if (constCheck.checked) update()
+  if (constCheck.checked) updateDashboard(dashboardCurrentDate)
 })
 famousCheck.addEventListener('change', () => {
   scene3d.setFamousVisible(famousCheck.checked)
-  if (famousCheck.checked) update()
+  if (famousCheck.checked) updateDashboard(dashboardCurrentDate)
 })
 trianglesCheck.addEventListener('change', () => {
   scene3d.setTrianglesVisible(trianglesCheck.checked)
-  if (trianglesCheck.checked) update()
+  if (trianglesCheck.checked) updateDashboard(dashboardCurrentDate)
 })
-
-// Real-time auto update every 10 seconds
-let realtimeInterval: ReturnType<typeof setInterval> | null = null
-
-function startRealtime() {
-  stopRealtime()
-  realtimeInterval = setInterval(() => {
-    if (realtimeCheck.checked) update()
-  }, 10000)
-}
-
-function stopRealtime() {
-  if (realtimeInterval !== null) {
-    clearInterval(realtimeInterval)
-    realtimeInterval = null
-  }
-}
-
-realtimeCheck.addEventListener('change', () => {
-  if (realtimeCheck.checked) startRealtime()
-  else stopRealtime()
-})
-
-startRealtime()
-update()
 
 // ---- フルスクリーン ----
 const mainEl = document.querySelector('main') as HTMLElement
@@ -377,134 +353,6 @@ langBtn.addEventListener('click', () => {
   scaleSceneTitle.textContent = t(scaleSceneTitleKey) // data-i18n化していないので手動で出し直す
 })
 
-// ---- 日/月/年モードの時間バー（3D+2D・SKY共通。scaleModel3d.tsの時間制御と同じ仕組み）----
-// 画面ごとにDOM一式(id接頭辞)が別なので、生成したcontrollerを画面数分インスタンス化する。
-// 状態(simAnchorDate/playback)は各画面で完全に独立しており、進めた時刻はdatetimeInput.valueへ
-// 反映して既存のupdate()で天体位置に反映させる
-type SimMode = 'day' | 'month' | 'year'
-const SIM_PERIOD_MS: Record<SimMode, number> = {
-  day: DAY_MS,
-  month: 30 * DAY_MS,
-  year: 365 * DAY_MS,
-}
-const SIM_REAL_DURATION_MS = 24_000 // 24秒で1周期を再生（旧24hシミュレーションと同じ体感速度）
-const STEP_DELTA_MS: Record<'hour' | 'day' | 'month', number> = {
-  hour: 60 * 60 * 1000, day: 24 * 60 * 60 * 1000, month: 30 * 24 * 60 * 60 * 1000,
-}
-const SEEKBAR_MAX = 1000
-
-function createSimPlaybackController(idPrefix: string) {
-  const modeButtons: Record<SimMode, HTMLButtonElement> = {
-    day: document.getElementById(`${idPrefix}-mode-day`) as HTMLButtonElement,
-    month: document.getElementById(`${idPrefix}-mode-month`) as HTMLButtonElement,
-    year: document.getElementById(`${idPrefix}-mode-year`) as HTMLButtonElement,
-  }
-  const nowBtn = document.getElementById(`${idPrefix}-now-btn`) as HTMLButtonElement
-  const playBtn = document.getElementById(`${idPrefix}-play-btn`) as HTMLButtonElement
-  const seekbar = document.getElementById(`${idPrefix}-seekbar`) as HTMLInputElement
-  const dateLabel = document.getElementById(`${idPrefix}-sim-date-label`) as HTMLElement
-
-  let simMode: SimMode = 'day'
-  let simAnchorDate = new Date()
-  const playback = new PlaybackController(SIM_PERIOD_MS.day, SIM_REAL_DURATION_MS)
-
-  function currentSimDate(): Date {
-    return new Date(simAnchorDate.getTime() + playback.elapsedMilliseconds)
-  }
-
-  function formatSimDate(date: Date, mode: SimMode): string {
-    const pad = (n: number) => String(n).padStart(2, '0')
-    const dateStr = `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
-    if (mode === 'day') return `${dateStr} ${pad(date.getHours())}:${pad(date.getMinutes())}`
-    return dateStr
-  }
-
-  function applySimDate() {
-    datetimeInput.value = toDatetimeLocal(currentSimDate())
-    update()
-    updateUI()
-  }
-
-  function updateUI() {
-    for (const key of ['day', 'month', 'year'] as const) {
-      modeButtons[key].classList.toggle('active', key === simMode)
-    }
-    playBtn.textContent = playback.isPlaying ? '⏸' : '▶'
-    seekbar.value = String(Math.round(playback.fraction * SEEKBAR_MAX))
-    dateLabel.textContent = formatSimDate(currentSimDate(), simMode)
-  }
-
-  /** モードは変えず、シミュレーション時刻だけを現在時刻に戻す（NOWボタン） */
-  function resetToNow() {
-    simAnchorDate = new Date()
-    playback.setPeriod(SIM_PERIOD_MS[simMode])
-    playback.reset()
-    realtimeCheck.checked = false
-    stopRealtime()
-    applySimDate()
-  }
-
-  /** 日/月/年モードを切り替える。シークバーは常に現在時刻を起点に先頭へリセットする */
-  function setSimMode(mode: SimMode) {
-    simMode = mode
-    resetToNow()
-  }
-
-  /** シークバーの範囲に縛られず「今の時刻」そのものを±deltaMs動かす */
-  function stepAnchorBy(deltaMs: number) {
-    playback.pause()
-    simAnchorDate = new Date(simAnchorDate.getTime() + deltaMs)
-    playback.reset()
-    realtimeCheck.checked = false
-    stopRealtime()
-    applySimDate()
-  }
-
-  for (const key of ['day', 'month', 'year'] as const) {
-    modeButtons[key].addEventListener('click', () => setSimMode(key))
-  }
-
-  nowBtn.addEventListener('click', () => resetToNow())
-
-  playBtn.addEventListener('click', () => {
-    playback.togglePlay()
-    if (playback.isPlaying) {
-      realtimeCheck.checked = false
-      stopRealtime()
-    }
-    updateUI()
-  })
-
-  seekbar.addEventListener('input', () => {
-    playback.pause()
-    playback.seekFraction(parseInt(seekbar.value, 10) / SEEKBAR_MAX)
-    realtimeCheck.checked = false
-    stopRealtime()
-    applySimDate()
-  })
-
-  for (const btn of document.querySelectorAll<HTMLButtonElement>(
-    `#${idPrefix}-step-back-b .step-btn, #${idPrefix}-step-fwd-b .step-btn`
-  )) {
-    const unit = btn.dataset.unit as 'hour' | 'day' | 'month'
-    const dir = Number(btn.dataset.dir)
-    btn.addEventListener('click', () => stepAnchorBy(STEP_DELTA_MS[unit] * dir))
-  }
-
-  updateUI()
-
-  // 継続的なrAFループ。playback.tick()は再生中でなければ何もしないため、常時回しっぱなしでよい
-  let lastAnimTime: number | null = null
-  function animLoop(timestamp: number) {
-    requestAnimationFrame(animLoop)
-    const dt = lastAnimTime === null ? 0 : (timestamp - lastAnimTime) / 1000
-    lastAnimTime = timestamp
-    if (!playback.isPlaying) return
-    playback.tick(dt)
-    applySimDate()
-  }
-  requestAnimationFrame(animLoop)
-}
-
-createSimPlaybackController('dashboard')
-createSimPlaybackController('sky')
+// ---- 日/月/年モードの時間バー（3D+2D・SKY共通。simPlayback.ts参照）----
+createSimPlaybackController('dashboard', updateDashboard)
+createSimPlaybackController('sky', updateSky)
