@@ -200,21 +200,7 @@
       </div>
     </section>
 
-    <!-- 24hシークバー: SKY専用（スマホでの片手操作用） -->
-    <section id="scene-playback" class="playback" style="display: none">
-      <button id="play-btn" class="play-btn" title="24時間シミュレーション 再生/停止" data-i18n-title="play-title">▶</button>
-      <span class="playback-label">24h sim</span>
-      <div class="seekbar-wrap">
-        <div class="seekbar-track-row">
-          <input type="range" id="seekbar" min="0" max="1439" value="0" class="seekbar">
-        </div>
-        <div class="seekbar-ticks">
-          <span>0h</span><span>3h</span><span>6h</span><span>9h</span><span>12h</span><span>15h</span><span>18h</span><span>21h</span><span>24h</span>
-        </div>
-      </div>
-    </section>
-
-    <!-- 3D+2D専用の時間バー: 日/月/年モード切替（#scale-playbackと同UI）。SKYには影響しない -->
+    <!-- 3D+2D専用の時間バー: 日/月/年モード切替（#scale-playbackと同UI） -->
     <section id="dashboard-playback" class="playback" style="display: none">
       <div class="scale-playback-row">
         <div class="scale-mode-toggle" role="group" aria-label="時間モード">
@@ -244,6 +230,39 @@
           <input type="range" id="dashboard-seekbar" min="0" max="1000" value="0" class="seekbar">
         </div>
         <div class="scale-seekbar-label" id="dashboard-sim-date-label">--</div>
+      </div>
+    </section>
+
+    <!-- SKY専用の時間バー: 3D+2Dと同じ日/月/年モードUI -->
+    <section id="sky-playback" class="playback" style="display: none">
+      <div class="scale-playback-row">
+        <div class="scale-mode-toggle" role="group" aria-label="時間モード">
+          <button id="sky-mode-day" class="scale-mode-btn" data-mode="day" data-i18n="scale-mode-day">日</button>
+          <button id="sky-mode-month" class="scale-mode-btn" data-mode="month" data-i18n="scale-mode-month">月</button>
+          <button id="sky-mode-year" class="scale-mode-btn" data-mode="year" data-i18n="scale-mode-year">年</button>
+        </div>
+        <button id="sky-now-btn" class="now-btn" title="現在時刻に戻す" data-i18n-title="now-title" data-i18n="now-btn">NOW</button>
+      </div>
+      <div class="scale-playback-row">
+        <div id="sky-step-back-b" class="scale-step-group">
+          <button class="step-btn" data-unit="month" data-dir="-1" title="1か月戻す">◀◀◀</button>
+          <button class="step-btn" data-unit="day" data-dir="-1" title="1日戻す">◀◀</button>
+          <button class="step-btn" data-unit="hour" data-dir="-1" title="1時間戻す">◀</button>
+        </div>
+
+        <button id="sky-play-btn" class="play-btn" title="再生/停止" data-i18n-title="play-title">▶</button>
+
+        <div id="sky-step-fwd-b" class="scale-step-group">
+          <button class="step-btn" data-unit="hour" data-dir="1" title="1時間進める">▶</button>
+          <button class="step-btn" data-unit="day" data-dir="1" title="1日進める">▶▶</button>
+          <button class="step-btn" data-unit="month" data-dir="1" title="1か月進める">▶▶▶</button>
+        </div>
+      </div>
+      <div class="seekbar-wrap">
+        <div class="seekbar-track-row">
+          <input type="range" id="sky-seekbar" min="0" max="1000" value="0" class="seekbar">
+        </div>
+        <div class="scale-seekbar-label" id="sky-sim-date-label">--</div>
       </div>
     </section>
   </main>

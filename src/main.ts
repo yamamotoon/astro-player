@@ -89,7 +89,7 @@ function getSettings() {
 // ---- シーン切り替え（メニュー / 3D+2D / SKY / スケールモデル） ----
 const sceneMenu = document.getElementById('scene-menu') as HTMLElement
 const sceneHud = document.getElementById('scene-hud') as HTMLElement
-const scenePlayback = document.getElementById('scene-playback') as HTMLElement
+const skyPlaybackSection = document.getElementById('sky-playback') as HTMLElement
 const dashboardPlaybackSection = document.getElementById('dashboard-playback') as HTMLElement
 const scalePlayback = document.getElementById('scale-playback') as HTMLElement
 const sceneDashboard = document.getElementById('scene-dashboard') as HTMLElement
@@ -115,7 +115,7 @@ function showScene(name: SceneName) {
   const showHud = name === 'dashboard' || name === 'sky'
   sceneMenu.style.display = name === 'menu' ? '' : 'none'
   sceneHud.style.display = showHud ? '' : 'none'
-  scenePlayback.style.display = name === 'sky' ? '' : 'none'
+  skyPlaybackSection.style.display = name === 'sky' ? '' : 'none'
   dashboardPlaybackSection.style.display = name === 'dashboard' ? '' : 'none'
   sceneDashboard.style.display = name === 'dashboard' ? '' : 'none'
   sceneSky.style.display = name === 'sky' ? '' : 'none'
@@ -244,19 +244,9 @@ menuScaleOrbitBtn.addEventListener('click', () => enterScaleMode(SCALE_CONFIG_OR
 menuScaleSpinBtn.addEventListener('click', () => enterScaleMode(SCALE_CONFIG_SPIN, 'view-scale-spin'))
 backToMenuBtn.addEventListener('click', () => showScene('menu'))
 
-// ---- 24時間シミュレーション（状態変数・DOM参照）----
+// ---- 天体位置の共通更新処理 ----
 const langBtn = document.getElementById('lang-btn') as HTMLButtonElement
-const playBtn = document.getElementById('play-btn') as HTMLButtonElement
-const seekbar = document.getElementById('seekbar') as HTMLInputElement
-const ANIM_DURATION_MS = 24_000 // 24秒で24時間（1秒=1時間）
 const DAY_MS = 24 * 60 * 60 * 1000
-const playback = new PlaybackController(DAY_MS, ANIM_DURATION_MS)
-
-function updateSeekbar(date: Date) {
-  if (playback.isPlaying) return // アニメーション中はplayback駆動のanimLoop側が管理
-  const minutes = date.getHours() * 60 + date.getMinutes()
-  seekbar.value = String(minutes)
-}
 
 function update() {
   const { lat, lng, date } = getSettings()
@@ -265,8 +255,6 @@ function update() {
   if (realtimeCheck.checked) {
     datetimeInput.value = toDatetimeLocal(date)
   }
-
-  updateSeekbar(date)
 
   const data = getAstroData(date, lat, lng)
   scene3d.update(data)
@@ -389,188 +377,134 @@ langBtn.addEventListener('click', () => {
   scaleSceneTitle.textContent = t(scaleSceneTitleKey) // data-i18n化していないので手動で出し直す
 })
 
-// ---- 24時間シミュレーション ----
-// ANIM_DURATION_MS/DAY_MS/playbackは既にファイル冒頭側(状態変数・DOM参照)で定義済み
-
-function getBaseDate(): Date {
-  const d = new Date(datetimeInput.value)
-  if (!isNaN(d.getTime())) return new Date(d.getFullYear(), d.getMonth(), d.getDate())
-  const now = new Date()
-  return new Date(now.getFullYear(), now.getMonth(), now.getDate())
-}
-
-function applySimMinute(minute: number) {
-  const m = Math.max(0, Math.min(1439, minute))
-  const h = Math.floor(m / 60)
-  const min = Math.floor(m % 60)
-  seekbar.value = String(Math.round(m))
-  const base = getBaseDate()
-  base.setHours(h, min, 0, 0)
-  datetimeInput.value = toDatetimeLocal(base)
-  update()
-}
-
-function stopAnim() {
-  playback.pause()
-  playBtn.textContent = '▶'
-}
-
-function startAnim() {
-  // 既存動作を踏襲: シークバーが終端付近(1439分=23:59)にある状態で再生すると先頭に戻る
-  const startMinute = parseInt(seekbar.value) || 0
-  playback.seekMs((startMinute >= 1439 ? 0 : startMinute) * 60_000)
-  playback.play()
-  playBtn.textContent = '⏸'
-  realtimeCheck.checked = false
-  stopRealtime()
-}
-
-playBtn.addEventListener('click', () => {
-  if (playback.isPlaying) stopAnim()
-  else startAnim()
-})
-
-seekbar.addEventListener('input', () => {
-  stopAnim()
-  realtimeCheck.checked = false
-  stopRealtime()
-  applySimMinute(parseInt(seekbar.value))
-})
-
-// 継続的なrAFループ。playback.tick()は再生中でなければ何もしないため、常時回しっぱなしでよい
-let lastAnimTime: number | null = null
-function animLoop(timestamp: number) {
-  requestAnimationFrame(animLoop)
-  const dt = lastAnimTime === null ? 0 : (timestamp - lastAnimTime) / 1000
-  lastAnimTime = timestamp
-  if (!playback.isPlaying) return
-  playback.tick(dt)
-  applySimMinute(playback.elapsedMilliseconds / 60_000)
-  if (!playback.isPlaying) playBtn.textContent = '▶' // 周期終端に達して自動停止した場合
-}
-requestAnimationFrame(animLoop)
-
-// ---- 3D+2D専用: 日/月/年モードの時間バー（scaleModel3d.tsの時間制御と同じ仕組み）----
-// SKYの24hシミュレーション（playback/seekbar/playBtn、上のブロック）とは完全に別状態・別DOM。
-// ここで進めた時刻はdatetimeInput.valueへ反映し、既存のupdate()で天体位置に反映させる
-type DashboardSimMode = 'day' | 'month' | 'year'
-const DASHBOARD_SIM_PERIOD_MS: Record<DashboardSimMode, number> = {
+// ---- 日/月/年モードの時間バー（3D+2D・SKY共通。scaleModel3d.tsの時間制御と同じ仕組み）----
+// 画面ごとにDOM一式(id接頭辞)が別なので、生成したcontrollerを画面数分インスタンス化する。
+// 状態(simAnchorDate/playback)は各画面で完全に独立しており、進めた時刻はdatetimeInput.valueへ
+// 反映して既存のupdate()で天体位置に反映させる
+type SimMode = 'day' | 'month' | 'year'
+const SIM_PERIOD_MS: Record<SimMode, number> = {
   day: DAY_MS,
   month: 30 * DAY_MS,
   year: 365 * DAY_MS,
 }
-const DASHBOARD_SIM_REAL_DURATION_MS = 24_000 // 24hシミュレーションと同じ体感速度に揃える
-const DASHBOARD_STEP_DELTA_MS: Record<'hour' | 'day' | 'month', number> = {
+const SIM_REAL_DURATION_MS = 24_000 // 24秒で1周期を再生（旧24hシミュレーションと同じ体感速度）
+const STEP_DELTA_MS: Record<'hour' | 'day' | 'month', number> = {
   hour: 60 * 60 * 1000, day: 24 * 60 * 60 * 1000, month: 30 * 24 * 60 * 60 * 1000,
 }
-const DASHBOARD_SEEKBAR_MAX = 1000
+const SEEKBAR_MAX = 1000
 
-let dashboardSimMode: DashboardSimMode = 'day'
-let dashboardSimAnchorDate = new Date()
-const dashboardPlayback = new PlaybackController(DASHBOARD_SIM_PERIOD_MS.day, DASHBOARD_SIM_REAL_DURATION_MS)
-
-const dashboardModeButtons: Record<DashboardSimMode, HTMLButtonElement> = {
-  day: document.getElementById('dashboard-mode-day') as HTMLButtonElement,
-  month: document.getElementById('dashboard-mode-month') as HTMLButtonElement,
-  year: document.getElementById('dashboard-mode-year') as HTMLButtonElement,
-}
-const dashboardPlaybackPlayBtn = document.getElementById('dashboard-play-btn') as HTMLButtonElement
-const dashboardNowBtn = document.getElementById('dashboard-now-btn') as HTMLButtonElement
-const dashboardPlaybackSeekbar = document.getElementById('dashboard-seekbar') as HTMLInputElement
-const dashboardPlaybackDateLabel = document.getElementById('dashboard-sim-date-label') as HTMLElement
-
-function dashboardCurrentSimDate(): Date {
-  return new Date(dashboardSimAnchorDate.getTime() + dashboardPlayback.elapsedMilliseconds)
-}
-
-function formatDashboardSimDate(date: Date, mode: DashboardSimMode): string {
-  const pad = (n: number) => String(n).padStart(2, '0')
-  const dateStr = `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
-  if (mode === 'day') return `${dateStr} ${pad(date.getHours())}:${pad(date.getMinutes())}`
-  return dateStr
-}
-
-/** 日/月/年モードを切り替える。シークバーは常に現在時刻を起点に先頭へリセットする */
-function setDashboardSimMode(mode: DashboardSimMode) {
-  dashboardSimMode = mode
-  resetDashboardToNow()
-}
-
-/** モードは変えず、シミュレーション時刻だけを現在時刻に戻す（NOWボタン） */
-function resetDashboardToNow() {
-  dashboardSimAnchorDate = new Date()
-  dashboardPlayback.setPeriod(DASHBOARD_SIM_PERIOD_MS[dashboardSimMode])
-  dashboardPlayback.reset()
-  realtimeCheck.checked = false
-  stopRealtime()
-  applyDashboardSimDate()
-}
-
-/** シークバーの範囲に縛られず「今の時刻」そのものを±deltaMs動かす */
-function stepDashboardAnchorBy(deltaMs: number) {
-  dashboardPlayback.pause()
-  dashboardSimAnchorDate = new Date(dashboardSimAnchorDate.getTime() + deltaMs)
-  dashboardPlayback.reset()
-  realtimeCheck.checked = false
-  stopRealtime()
-  applyDashboardSimDate()
-}
-
-function applyDashboardSimDate() {
-  datetimeInput.value = toDatetimeLocal(dashboardCurrentSimDate())
-  update()
-  updateDashboardPlaybackUI()
-}
-
-/** 時間バー(モードボタンの見た目・シークバーの位置・再生ボタンのアイコン・日時ラベル)を同期する */
-function updateDashboardPlaybackUI() {
-  for (const key of ['day', 'month', 'year'] as const) {
-    dashboardModeButtons[key].classList.toggle('active', key === dashboardSimMode)
+function createSimPlaybackController(idPrefix: string) {
+  const modeButtons: Record<SimMode, HTMLButtonElement> = {
+    day: document.getElementById(`${idPrefix}-mode-day`) as HTMLButtonElement,
+    month: document.getElementById(`${idPrefix}-mode-month`) as HTMLButtonElement,
+    year: document.getElementById(`${idPrefix}-mode-year`) as HTMLButtonElement,
   }
-  dashboardPlaybackPlayBtn.textContent = dashboardPlayback.isPlaying ? '⏸' : '▶'
-  dashboardPlaybackSeekbar.value = String(Math.round(dashboardPlayback.fraction * DASHBOARD_SEEKBAR_MAX))
-  dashboardPlaybackDateLabel.textContent = formatDashboardSimDate(dashboardCurrentSimDate(), dashboardSimMode)
-}
+  const nowBtn = document.getElementById(`${idPrefix}-now-btn`) as HTMLButtonElement
+  const playBtn = document.getElementById(`${idPrefix}-play-btn`) as HTMLButtonElement
+  const seekbar = document.getElementById(`${idPrefix}-seekbar`) as HTMLInputElement
+  const dateLabel = document.getElementById(`${idPrefix}-sim-date-label`) as HTMLElement
 
-for (const key of ['day', 'month', 'year'] as const) {
-  dashboardModeButtons[key].addEventListener('click', () => setDashboardSimMode(key))
-}
+  let simMode: SimMode = 'day'
+  let simAnchorDate = new Date()
+  const playback = new PlaybackController(SIM_PERIOD_MS.day, SIM_REAL_DURATION_MS)
 
-dashboardNowBtn.addEventListener('click', () => resetDashboardToNow())
+  function currentSimDate(): Date {
+    return new Date(simAnchorDate.getTime() + playback.elapsedMilliseconds)
+  }
 
-dashboardPlaybackPlayBtn.addEventListener('click', () => {
-  dashboardPlayback.togglePlay()
-  if (dashboardPlayback.isPlaying) {
+  function formatSimDate(date: Date, mode: SimMode): string {
+    const pad = (n: number) => String(n).padStart(2, '0')
+    const dateStr = `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
+    if (mode === 'day') return `${dateStr} ${pad(date.getHours())}:${pad(date.getMinutes())}`
+    return dateStr
+  }
+
+  function applySimDate() {
+    datetimeInput.value = toDatetimeLocal(currentSimDate())
+    update()
+    updateUI()
+  }
+
+  function updateUI() {
+    for (const key of ['day', 'month', 'year'] as const) {
+      modeButtons[key].classList.toggle('active', key === simMode)
+    }
+    playBtn.textContent = playback.isPlaying ? '⏸' : '▶'
+    seekbar.value = String(Math.round(playback.fraction * SEEKBAR_MAX))
+    dateLabel.textContent = formatSimDate(currentSimDate(), simMode)
+  }
+
+  /** モードは変えず、シミュレーション時刻だけを現在時刻に戻す（NOWボタン） */
+  function resetToNow() {
+    simAnchorDate = new Date()
+    playback.setPeriod(SIM_PERIOD_MS[simMode])
+    playback.reset()
     realtimeCheck.checked = false
     stopRealtime()
+    applySimDate()
   }
-  updateDashboardPlaybackUI()
-})
 
-dashboardPlaybackSeekbar.addEventListener('input', () => {
-  dashboardPlayback.pause()
-  dashboardPlayback.seekFraction(parseInt(dashboardPlaybackSeekbar.value, 10) / DASHBOARD_SEEKBAR_MAX)
-  realtimeCheck.checked = false
-  stopRealtime()
-  applyDashboardSimDate()
-})
+  /** 日/月/年モードを切り替える。シークバーは常に現在時刻を起点に先頭へリセットする */
+  function setSimMode(mode: SimMode) {
+    simMode = mode
+    resetToNow()
+  }
 
-for (const btn of document.querySelectorAll<HTMLButtonElement>('#dashboard-step-back-b .step-btn, #dashboard-step-fwd-b .step-btn')) {
-  const unit = btn.dataset.unit as 'hour' | 'day' | 'month'
-  const dir = Number(btn.dataset.dir)
-  btn.addEventListener('click', () => stepDashboardAnchorBy(DASHBOARD_STEP_DELTA_MS[unit] * dir))
+  /** シークバーの範囲に縛られず「今の時刻」そのものを±deltaMs動かす */
+  function stepAnchorBy(deltaMs: number) {
+    playback.pause()
+    simAnchorDate = new Date(simAnchorDate.getTime() + deltaMs)
+    playback.reset()
+    realtimeCheck.checked = false
+    stopRealtime()
+    applySimDate()
+  }
+
+  for (const key of ['day', 'month', 'year'] as const) {
+    modeButtons[key].addEventListener('click', () => setSimMode(key))
+  }
+
+  nowBtn.addEventListener('click', () => resetToNow())
+
+  playBtn.addEventListener('click', () => {
+    playback.togglePlay()
+    if (playback.isPlaying) {
+      realtimeCheck.checked = false
+      stopRealtime()
+    }
+    updateUI()
+  })
+
+  seekbar.addEventListener('input', () => {
+    playback.pause()
+    playback.seekFraction(parseInt(seekbar.value, 10) / SEEKBAR_MAX)
+    realtimeCheck.checked = false
+    stopRealtime()
+    applySimDate()
+  })
+
+  for (const btn of document.querySelectorAll<HTMLButtonElement>(
+    `#${idPrefix}-step-back-b .step-btn, #${idPrefix}-step-fwd-b .step-btn`
+  )) {
+    const unit = btn.dataset.unit as 'hour' | 'day' | 'month'
+    const dir = Number(btn.dataset.dir)
+    btn.addEventListener('click', () => stepAnchorBy(STEP_DELTA_MS[unit] * dir))
+  }
+
+  updateUI()
+
+  // 継続的なrAFループ。playback.tick()は再生中でなければ何もしないため、常時回しっぱなしでよい
+  let lastAnimTime: number | null = null
+  function animLoop(timestamp: number) {
+    requestAnimationFrame(animLoop)
+    const dt = lastAnimTime === null ? 0 : (timestamp - lastAnimTime) / 1000
+    lastAnimTime = timestamp
+    if (!playback.isPlaying) return
+    playback.tick(dt)
+    applySimDate()
+  }
+  requestAnimationFrame(animLoop)
 }
 
-updateDashboardPlaybackUI()
-
-// 継続的なrAFループ（SKY側のanimLoopと同じ仕組みの独立版）
-let lastDashboardAnimTime: number | null = null
-function dashboardAnimLoop(timestamp: number) {
-  requestAnimationFrame(dashboardAnimLoop)
-  const dt = lastDashboardAnimTime === null ? 0 : (timestamp - lastDashboardAnimTime) / 1000
-  lastDashboardAnimTime = timestamp
-  if (!dashboardPlayback.isPlaying) return
-  dashboardPlayback.tick(dt)
-  applyDashboardSimDate()
-}
-requestAnimationFrame(dashboardAnimLoop)
+createSimPlaybackController('dashboard')
+createSimPlaybackController('sky')

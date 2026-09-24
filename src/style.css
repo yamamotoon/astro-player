@@ -573,13 +573,6 @@ main[data-fs="view2d"]:fullscreen #canvas2d {
   background: #2a4a8e;
 }
 
-.playback-label {
-  font-size: 0.72rem;
-  color: #506080;
-  white-space: nowrap;
-  flex-shrink: 0;
-}
-
 .seekbar-wrap {
   flex: 1;
   display: flex;
@@ -598,15 +591,6 @@ main[data-fs="view2d"]:fullscreen #canvas2d {
   accent-color: #4070c0;
   cursor: pointer;
   height: 4px;
-}
-
-.seekbar-ticks {
-  display: flex;
-  justify-content: space-between;
-  padding: 0 2px;
-  font-size: 0.64rem;
-  color: #506080;
-  user-select: none;
 }
 
 /* ---- スケールモデル専用の時間バー（issue #004） ---- */
@@ -666,9 +650,11 @@ main[data-fs="view2d"]:fullscreen #canvas2d {
 }
 
 /* ---- 日/月/年モードの時間バー: モード切替・ステップ再生・シークバーの3段構成（issue-009）。
-   #scale-playback（スケールモデル）と#dashboard-playback（3D+2D）で共通の見た目にする ---- */
+   #scale-playback（スケールモデル）・#dashboard-playback（3D+2D）・#sky-playback（SKY）
+   で共通の見た目にする ---- */
 #scale-playback,
-#dashboard-playback {
+#dashboard-playback,
+#sky-playback {
   flex-direction: column;
   align-items: stretch;
   gap: 6px;
@@ -901,11 +887,12 @@ main[data-fs="view2d"]:fullscreen #canvas2d {
 
   /* 日/月/年モードの時間バー: 縦向きは3段（モード切替／ステップ+再生／シークバー）だが、横向きは
      縦の余裕がない代わりに横は十分広い。ボタンを小さくして押しにくくするのではなく、
-     .scale-playback-row(2つ)をdisplay:contentsにして中身を#scale-playback/#dashboard-playback
-     自身のflexアイテムとして直接並べ、幅が許す限り1行にまとめる（入りきらなければ自然に折り返す
-     だけなので、極端に狭い端末でも崩れはしない）。シークバーは常に単独の行にする */
+     .scale-playback-row(2つ)をdisplay:contentsにして中身を#scale-playback/#dashboard-playback/
+     #sky-playback自身のflexアイテムとして直接並べ、幅が許す限り1行にまとめる（入りきらなければ
+     自然に折り返すだけなので、極端に狭い端末でも崩れはしない）。シークバーは常に単独の行にする */
   #scale-playback,
-  #dashboard-playback {
+  #dashboard-playback,
+  #sky-playback {
     flex-direction: row;
     flex-wrap: wrap;
     justify-content: center;
