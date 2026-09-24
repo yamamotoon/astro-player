@@ -1,4 +1,9 @@
 import { PlaybackController } from './playbackController'
+import { setIcon, setChevronSteps } from './iconInjector'
+import playIconSvg from './icons/play.svg?raw'
+import pauseIconSvg from './icons/pause.svg?raw'
+import chevronLeftSvg from './icons/chevron-left.svg?raw'
+import chevronRightSvg from './icons/chevron-right.svg?raw'
 
 export type SimMode = 'day' | 'month' | 'year'
 
@@ -75,11 +80,17 @@ export function createSimPlaybackController(
     updateUI()
   }
 
+  // 再生アイコンは状態が変わった時だけ差し替える（毎フレームinnerHTMLを書き換えるのは無駄なため）
+  let lastIsPlaying: boolean | null = null
+
   function updateUI() {
     for (const key of ['day', 'month', 'year'] as const) {
       modeButtons[key].classList.toggle('active', key === simMode)
     }
-    playBtn.textContent = playback.isPlaying ? '⏸' : '▶'
+    if (playback.isPlaying !== lastIsPlaying) {
+      lastIsPlaying = playback.isPlaying
+      setIcon(playBtn, playback.isPlaying ? pauseIconSvg : playIconSvg)
+    }
     seekbar.value = String(Math.round(playback.fraction * SEEKBAR_MAX))
     const simDateStr = formatSimDate(currentSimDate(), simMode)
     dateLabel.textContent = simDateStr
@@ -134,11 +145,15 @@ export function createSimPlaybackController(
     applySimDate()
   })
 
+  // ステップボタンの矢印の数(1〜3)は単位(時=1/日=2/月=3)を表す。向き(dir)で左右どちらの
+  // 矢印アイコンを使うかを決める
+  const STEP_CHEVRON_COUNT: Record<'hour' | 'day' | 'month', number> = { hour: 1, day: 2, month: 3 }
   for (const btn of document.querySelectorAll<HTMLButtonElement>(
     `#${idPrefix}-step-back-b .step-btn, #${idPrefix}-step-fwd-b .step-btn`
   )) {
     const unit = btn.dataset.unit as 'hour' | 'day' | 'month'
     const dir = Number(btn.dataset.dir)
+    setChevronSteps(btn, dir < 0 ? chevronLeftSvg : chevronRightSvg, STEP_CHEVRON_COUNT[unit])
     on(btn, 'click', () => stepAnchorBy(STEP_DELTA_MS[unit] * dir))
   }
 

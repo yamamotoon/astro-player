@@ -75,6 +75,16 @@ header h1 {
   display: none;
 }
 
+/* アイコンボタン共通: src/icons/*.svgをmain.tsのsetIcon()でinnerHTML注入して使う。
+   fill/stroke="currentColor"にしているので、ボタンのcolorプロパティで色を制御できる。
+   SVGファイル自体にはclassを持たせず、挿入先ボタンの子セレクタでサイズを指定する */
+.back-btn svg,
+.toggle-controls svg,
+.fullscreen-btn svg {
+  width: 20px;
+  height: 20px;
+}
+
 /* ---- メニュー画面 ---- */
 .menu-main {
   flex: 1;
@@ -161,15 +171,27 @@ header h1 {
   background: #1a1a40;
   border: 1px solid #2a2a4a;
   color: #7080a0;
-  padding: 3px 10px;
-  min-height: 40px;
-  border-radius: 4px;
-  font-size: 0.75rem;
+  width: 40px;
+  height: 40px;
+  border-radius: 6px;
+  font-size: 1.1rem;
+  line-height: 1;
   cursor: pointer;
-  white-space: nowrap;
   flex-shrink: 0;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
+}
+
+.toggle-controls.active {
+  background: #2a3a6e;
+  border-color: #3a5a9e;
+  color: #a0c0ff;
+}
+
+.gear-icon {
+  width: 20px;
+  height: 20px;
 }
 
 .toggle-controls[hidden] {
@@ -577,6 +599,11 @@ main[data-fs="view2d"]:fullscreen #canvas2d {
   background: #2a4a8e;
 }
 
+.play-btn svg {
+  width: 18px;
+  height: 18px;
+}
+
 .seekbar-wrap {
   flex: 1;
   display: flex;
@@ -699,13 +726,24 @@ main[data-fs="view2d"]:fullscreen #canvas2d {
   background: transparent;
   border: 1px solid #2a2a4a;
   color: #7080a0;
-  font-size: 0.8rem;
   padding: 8px 9px;
   min-height: 40px;
   min-width: 40px;
   border-radius: 6px;
-  white-space: nowrap;
   cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.step-btn svg {
+  width: 14px;
+  height: 14px;
+  margin-left: -4px;
+}
+
+.step-btn svg:first-child {
+  margin-left: 0;
 }
 
 .step-btn:hover {

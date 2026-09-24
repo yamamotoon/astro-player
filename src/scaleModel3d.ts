@@ -4,6 +4,9 @@ import { t } from './i18n'
 import earthTextureUrl from './assets/earth-texture.png'
 import moonTextureUrl from './assets/moon-texture.png'
 import { createSimPlaybackController, type SimMode, type SimPlaybackController } from './simPlayback'
+import { setIcon } from './iconInjector'
+import targetIconSvg from './icons/target.svg?raw'
+import orbitIconSvg from './icons/orbit.svg?raw'
 import {
   dayOfYearFraction, orbitalAngleFromEpoch, subsolarLonRad, localDirForLon, localDirForLatLon,
   computeOrbitalPositions, type InnerPlanetKey, INNER_PLANET_KEYS,
@@ -504,6 +507,8 @@ export class ScaleModel3D {
 
     // 「フォーカス」「系全体」ボタン（issue #006）。対象の天体は変えず、カメラの距離だけを
     // プリセットの距離にジャンプさせる。そこから先の手動ズーム・回転は制限しない
+    setIcon(this.targetFocusBtn, targetIconSvg)
+    setIcon(this.targetSystemBtn, orbitIconSvg)
     this.on(this.targetFocusBtn, 'click', () => this.focusOnTarget())
     this.on(this.targetSystemBtn, 'click', () => this.focusOnSystemView())
 

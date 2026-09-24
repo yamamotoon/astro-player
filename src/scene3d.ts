@@ -71,7 +71,7 @@ export class Scene3D {
     this.sunLine = this.makeLine(0xffee44)
     this.moonLine = this.makeLine(0xaaaacc)
 
-    this.handleResize()
+    this.handleResize(true)
     window.addEventListener('resize', () => this.handleResize())
     this.startLoop()
 
@@ -242,7 +242,7 @@ export class Scene3D {
     attr.needsUpdate = true
   }
 
-  handleResize() {
+  handleResize(fitSphere = false) {
     const parent = this.renderer.domElement.parentElement!
     const w = parent.clientWidth
     const h = parent.clientHeight
@@ -250,6 +250,37 @@ export class Scene3D {
     this.renderer.setSize(w, h)
     this.camera.aspect = w / h
     this.camera.updateProjectionMatrix()
+    // 初期表示時だけ天球が画面に収まる距離まで自動調整する。以降のリサイズ（フルスクリーン
+    // 切替等）でこれを毎回やると、ユーザーが手動でズームインした状態を勝手に戻してしまうため
+    if (fitSphere) this.ensureSphereFitsView()
+  }
+
+  /**
+   * 縦長(狭い横幅)の画面では、固定距離のカメラだと天球(半径R)が画面の左右にはみ出し、
+   * 毎回ユーザーがドラッグ/ピンチで手動ズームアウトして全体を収める必要があった。
+   * これを不要にするため、現在のカメラの向き(target→cameraの方向ベクトル)は変えずに、
+   * 距離だけを「天球が画面に収まる最小距離」以上になるよう補正する。FOV自体は変更しない
+   * （見え方の構図は変えず、視点の遠近だけを調整する）
+   */
+  // 画面の縁ギリギリだと窮屈なので、ちょうど収まる距離より少し余白を持たせる
+  private static readonly FIT_MARGIN = 1.15
+
+  private ensureSphereFitsView() {
+    const target = this.controls.target
+    const offset = new THREE.Vector3().subVectors(this.camera.position, target)
+    const currentDistance = offset.length()
+    if (currentDistance < 1e-6) return
+
+    const vFovRad = THREE.MathUtils.degToRad(this.camera.fov)
+    const hFovRad = 2 * Math.atan(Math.tan(vFovRad / 2) * this.camera.aspect)
+    const requiredDistance = (R / Math.min(Math.sin(vFovRad / 2), Math.sin(hFovRad / 2))) * Scene3D.FIT_MARGIN
+
+    if (requiredDistance > currentDistance) {
+      if (requiredDistance > this.controls.maxDistance) this.controls.maxDistance = requiredDistance
+      offset.setLength(requiredDistance)
+      this.camera.position.copy(target).add(offset)
+      this.controls.update()
+    }
   }
 
   private startLoop() {

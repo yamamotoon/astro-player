@@ -7,6 +7,12 @@ import { ARView } from './ar'
 import { ScaleModel3D, type ScaleModelConfig } from './scaleModel3d'
 import { createSimPlaybackController } from './simPlayback'
 import { CompassHeadingTracker } from './compassHeading'
+import { setIcon } from './iconInjector'
+import backIconSvg from './icons/back.svg?raw'
+import gearIconSvg from './icons/gear.svg?raw'
+import fullscreenExpandIconSvg from './icons/fullscreen-expand.svg?raw'
+import fullscreenCollapseIconSvg from './icons/fullscreen-collapse.svg?raw'
+import frameAllIconSvg from './icons/frame-all.svg?raw'
 
 type SceneName = 'menu' | 'dashboard' | 'sky' | 'scale'
 
@@ -65,15 +71,16 @@ const SCALE_CONFIG_SPIN: ScaleModelConfig = {
 const scaleSceneTitle = document.getElementById('scale-scene-title') as HTMLElement
 let scaleSceneTitleKey = 'view-scale'
 
-function enterScaleMode(config: ScaleModelConfig, titleKey: string) {
+function enterScaleMode(config: ScaleModelConfig, titleKey: string, navTitleKey: string) {
   scaleModel?.dispose()
   scaleModel = new ScaleModel3D(canvasScale, config)
   scaleSceneTitle.textContent = t(titleKey)
   scaleSceneTitleKey = titleKey
-  showScene('scale')
+  showScene('scale', navTitleKey)
 }
 
 const scaleFitBtn = document.getElementById('scale-fit-btn') as HTMLButtonElement
+setIcon(scaleFitBtn, frameAllIconSvg)
 scaleFitBtn.addEventListener('click', () => scaleModel?.frameAll())
 
 // ---- シーン切り替え（メニュー / 3D+2D / SKY / スケールモデル） ----
@@ -87,20 +94,35 @@ const sceneSky = document.getElementById('scene-sky') as HTMLElement
 const sceneScale = document.getElementById('scene-scale') as HTMLElement
 const constToggles = document.getElementById('const-toggles') as HTMLElement
 const backToMenuBtn = document.getElementById('back-to-menu-btn') as HTMLButtonElement
+setIcon(backToMenuBtn, backIconSvg)
 const toggleControlsBtn = document.getElementById('toggle-controls') as HTMLButtonElement
+setIcon(toggleControlsBtn, gearIconSvg)
 const menuDashboardBtn = document.getElementById('menu-dashboard-btn') as HTMLButtonElement
 const menuSkyBtn = document.getElementById('menu-sky-btn') as HTMLButtonElement
 const menuScaleBtn = document.getElementById('menu-scale-btn') as HTMLButtonElement
 const menuScaleOrbitBtn = document.getElementById('menu-scale-orbit-btn') as HTMLButtonElement
 const menuScaleSpinBtn = document.getElementById('menu-scale-spin-btn') as HTMLButtonElement
 
-function showScene(name: SceneName) {
+// header中央のタイトル。メニューでは常にアプリ名、それ以外の画面では今の画面名に差し替える
+// （言語切替時にも出し直せるよう、キー自体を覚えておく。data-i18n属性は付けない＝
+// applyLang()の一括スイープで固定文言に戻されてしまうのを避けるため）
+const headerTitle = document.getElementById('header-title') as HTMLElement
+let headerTitleKey = 'h1'
+
+function setHeaderTitle(titleKey: string) {
+  headerTitleKey = titleKey
+  headerTitle.textContent = t(titleKey)
+}
+
+function showScene(name: SceneName, titleKey: string = 'h1') {
   // スケール系モードは「今画面に出ている時だけ生きている」設計（issue #008）。
   // scale以外へ出ていく瞬間に必ず破棄し、非表示中に描画し続けないようにする
   if (name !== 'scale' && scaleModel) {
     scaleModel.dispose()
     scaleModel = null
   }
+
+  setHeaderTitle(titleKey)
 
   const showHud = name === 'dashboard' || name === 'sky'
   sceneMenu.style.display = name === 'menu' ? '' : 'none'
@@ -117,8 +139,9 @@ function showScene(name: SceneName) {
   if (name !== 'sky') arView.stop()
   if (document.fullscreenElement) document.exitFullscreen()
   if (name === 'dashboard') {
-    // 非表示中はサイズ0で解像度が決まらないため、表示直後に再計算する
-    requestAnimationFrame(() => scene3d.handleResize())
+    // 非表示中はサイズ0で解像度が決まらないため、表示直後に再計算する。
+    // 画面を開くたび毎回、天球が確実に収まる距離まで自動調整する
+    requestAnimationFrame(() => scene3d.handleResize(true))
   }
   if (name === 'scale') {
     requestAnimationFrame(() => scaleModel?.handleResize())
@@ -220,18 +243,18 @@ compassToggle3dBtn.addEventListener('click', () => setCompassEnabled('3d', !comp
 compassToggle2dBtn.addEventListener('click', () => setCompassEnabled('2d', !compass2dEnabled))
 
 menuDashboardBtn.addEventListener('click', () => {
-  showScene('dashboard')
+  showScene('dashboard', 'nav-dashboard')
   setDashboardView(activeDashboardView)
 })
 menuSkyBtn.addEventListener('click', () => {
   // ジェスチャーを保持したまま同じクリックハンドラ内で開始する
   // （iOS Safariのジャイロ許可はユーザー操作から直接呼ばないと通らないため）
-  showScene('sky')
+  showScene('sky', 'nav-sky')
   arView.start(arCanvas)
 })
-menuScaleBtn.addEventListener('click', () => enterScaleMode(SCALE_CONFIG_FULL, 'view-scale'))
-menuScaleOrbitBtn.addEventListener('click', () => enterScaleMode(SCALE_CONFIG_ORBIT, 'view-scale-orbit'))
-menuScaleSpinBtn.addEventListener('click', () => enterScaleMode(SCALE_CONFIG_SPIN, 'view-scale-spin'))
+menuScaleBtn.addEventListener('click', () => enterScaleMode(SCALE_CONFIG_FULL, 'view-scale', 'nav-scale'))
+menuScaleOrbitBtn.addEventListener('click', () => enterScaleMode(SCALE_CONFIG_ORBIT, 'view-scale-orbit', 'nav-scale-orbit'))
+menuScaleSpinBtn.addEventListener('click', () => enterScaleMode(SCALE_CONFIG_SPIN, 'view-scale-spin', 'nav-scale-spin'))
 backToMenuBtn.addEventListener('click', () => showScene('menu'))
 
 // ---- 天体位置の共通更新処理 ----
@@ -294,11 +317,12 @@ trianglesCheck.addEventListener('change', () => {
 const mainEl = document.querySelector('main') as HTMLElement
 
 document.querySelectorAll<HTMLButtonElement>('.fullscreen-btn[data-target]').forEach(btn => {
+  setIcon(btn, fullscreenExpandIconSvg)
   btn.addEventListener('click', () => {
     if (!document.fullscreenElement) {
       mainEl.dataset.fs = btn.dataset.target ?? ''
       mainEl.requestFullscreen().catch(() => {})
-      btn.textContent = '✕'
+      setIcon(btn, fullscreenCollapseIconSvg)
     } else {
       document.exitFullscreen()
     }
@@ -309,7 +333,7 @@ document.addEventListener('fullscreenchange', () => {
   if (!document.fullscreenElement) {
     delete mainEl.dataset.fs
     document.querySelectorAll<HTMLButtonElement>('.fullscreen-btn[data-target]').forEach(b => {
-      b.textContent = '⛶'
+      setIcon(b, fullscreenExpandIconSvg)
     })
     scene3d.handleResize()
   } else {
@@ -323,7 +347,7 @@ const controlsSection = document.querySelector('.controls') as HTMLElement
 
 function refreshToggleBtn() {
   const isOpen = !controlsSection.classList.contains('collapsed')
-  toggleControlsBtn.textContent = isOpen ? t('settings-open') : t('settings-close')
+  toggleControlsBtn.classList.toggle('active', isOpen)
 }
 
 toggleControlsBtn.addEventListener('click', () => {
@@ -351,6 +375,7 @@ langBtn.addEventListener('click', () => {
   arView.refreshDirLabels()
   scaleModel?.refreshTextLabels()
   scaleSceneTitle.textContent = t(scaleSceneTitleKey) // data-i18n化していないので手動で出し直す
+  headerTitle.textContent = t(headerTitleKey)
 })
 
 // ---- 日/月/年モードの時間バー（3D+2D・SKY共通。simPlayback.ts参照）----
