@@ -3,9 +3,10 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <link rel="icon" type="image/svg+xml" href="/astro-player/favicon.svg">
   <title>天空プレイヤー - 太陽・月位置シミュレーター</title>
-  <script type="module" crossorigin src="/astro-player/assets/index-vCLz2LEB.js"></script>
-  <link rel="stylesheet" crossorigin href="/astro-player/assets/index-Dwcb2rmm.css">
+  <script type="module" crossorigin src="/astro-player/assets/index-BuiR0Jdf.js"></script>
+  <link rel="stylesheet" crossorigin href="/astro-player/assets/index-CxTfhALD.css">
 </head>
 <body>
   <header>
@@ -126,17 +127,6 @@
         </button>
         <canvas id="canvas2d" width="280" height="280"></canvas>
       </div>
-      <div class="info-panel">
-        <table id="info-table">
-          <thead>
-            <tr><th data-i18n="col-item">項目</th><th data-i18n="col-sun">太陽</th><th data-i18n="col-moon">月</th></tr>
-          </thead>
-          <tbody>
-            <tr><td data-i18n="row-rise">出</td><td id="sun-rise">-</td><td id="moon-rise">-</td></tr>
-            <tr><td data-i18n="row-set">入り</td><td id="sun-set">-</td><td id="moon-set">-</td></tr>
-          </tbody>
-        </table>
-      </div>
     </section>
 
     <!-- SKY シーン -->
@@ -185,6 +175,7 @@
           <button id="scale-mode-month" class="scale-mode-btn" data-mode="month" data-i18n="scale-mode-month">月</button>
           <button id="scale-mode-year" class="scale-mode-btn" data-mode="year" data-i18n="scale-mode-year">年</button>
         </div>
+        <button id="scale-now-btn" class="now-btn" title="現在時刻に戻す" data-i18n-title="now-title" data-i18n="now-btn">NOW</button>
       </div>
       <div class="scale-playback-row">
         <!-- ステップ再生（issue-009）: 時/日/月の3段を常時表示し、シーク範囲に縛られず時刻そのものを移動する -->
@@ -210,7 +201,7 @@
       </div>
     </section>
 
-    <!-- 24hシークバー: 画面下部・メニュー以外の全シーンで表示（スマホでの片手操作用） -->
+    <!-- 24hシークバー: SKY専用（スマホでの片手操作用） -->
     <section id="scene-playback" class="playback" style="display: none">
       <button id="play-btn" class="play-btn" title="24時間シミュレーション 再生/停止" data-i18n-title="play-title">▶</button>
       <span class="playback-label">24h sim</span>
@@ -221,6 +212,39 @@
         <div class="seekbar-ticks">
           <span>0h</span><span>3h</span><span>6h</span><span>9h</span><span>12h</span><span>15h</span><span>18h</span><span>21h</span><span>24h</span>
         </div>
+      </div>
+    </section>
+
+    <!-- 3D+2D専用の時間バー: 日/月/年モード切替（#scale-playbackと同UI）。SKYには影響しない -->
+    <section id="dashboard-playback" class="playback" style="display: none">
+      <div class="scale-playback-row">
+        <div class="scale-mode-toggle" role="group" aria-label="時間モード">
+          <button id="dashboard-mode-day" class="scale-mode-btn" data-mode="day" data-i18n="scale-mode-day">日</button>
+          <button id="dashboard-mode-month" class="scale-mode-btn" data-mode="month" data-i18n="scale-mode-month">月</button>
+          <button id="dashboard-mode-year" class="scale-mode-btn" data-mode="year" data-i18n="scale-mode-year">年</button>
+        </div>
+        <button id="dashboard-now-btn" class="now-btn" title="現在時刻に戻す" data-i18n-title="now-title" data-i18n="now-btn">NOW</button>
+      </div>
+      <div class="scale-playback-row">
+        <div id="dashboard-step-back-b" class="scale-step-group">
+          <button class="step-btn" data-unit="month" data-dir="-1" title="1か月戻す">◀◀◀</button>
+          <button class="step-btn" data-unit="day" data-dir="-1" title="1日戻す">◀◀</button>
+          <button class="step-btn" data-unit="hour" data-dir="-1" title="1時間戻す">◀</button>
+        </div>
+
+        <button id="dashboard-play-btn" class="play-btn" title="再生/停止" data-i18n-title="play-title">▶</button>
+
+        <div id="dashboard-step-fwd-b" class="scale-step-group">
+          <button class="step-btn" data-unit="hour" data-dir="1" title="1時間進める">▶</button>
+          <button class="step-btn" data-unit="day" data-dir="1" title="1日進める">▶▶</button>
+          <button class="step-btn" data-unit="month" data-dir="1" title="1か月進める">▶▶▶</button>
+        </div>
+      </div>
+      <div class="seekbar-wrap">
+        <div class="seekbar-track-row">
+          <input type="range" id="dashboard-seekbar" min="0" max="1000" value="0" class="seekbar">
+        </div>
+        <div class="scale-seekbar-label" id="dashboard-sim-date-label">--</div>
       </div>
     </section>
   </main>
