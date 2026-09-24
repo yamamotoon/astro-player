@@ -5,16 +5,16 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <link rel="icon" type="image/svg+xml" href="/astro-player/favicon.svg">
   <title>天空プレイヤー - 太陽・月位置シミュレーター</title>
-  <script type="module" crossorigin src="/astro-player/assets/index-BuiR0Jdf.js"></script>
-  <link rel="stylesheet" crossorigin href="/astro-player/assets/index-CxTfhALD.css">
+  <script type="module" crossorigin src="/astro-player/assets/index-vB8CC5pf.js"></script>
+  <link rel="stylesheet" crossorigin href="/astro-player/assets/index-q3bg6HbG.css">
 </head>
 <body>
   <header>
-    <button id="back-to-menu-btn" class="back-btn" aria-label="メニューに戻る" data-i18n-aria-label="nav-back" hidden>←</button>
-    <h1 data-i18n="h1">天空プレイヤー</h1>
+    <button id="back-to-menu-btn" class="back-btn" aria-label="メニューに戻る" data-i18n-aria-label="nav-back" hidden></button>
+    <h1 id="header-title">天空プレイヤー</h1>
     <div class="header-actions">
       <button id="lang-btn" class="lang-btn">EN</button>
-      <button id="toggle-controls" class="toggle-controls" aria-expanded="false" aria-label="設定を開閉" data-i18n-aria-label="toggle-aria" hidden>設定 ▼</button>
+      <button id="toggle-controls" class="toggle-controls" aria-expanded="false" aria-label="設定を開閉" data-i18n-aria-label="toggle-aria" hidden></button>
     </div>
   </header>
 
@@ -61,12 +61,6 @@
           </div>
         </div>
         <div class="control-group">
-          <label data-i18n="datetime">日時</label>
-          <input type="datetime-local" id="datetime">
-          <label class="realtime-label">
-            <input type="checkbox" id="realtime" checked>
-            <span data-i18n="realtime">リアルタイム更新</span>
-          </label>
           <span id="const-toggles">
             <label class="realtime-label">
               <input type="checkbox" id="show-constellations">
@@ -93,7 +87,7 @@
       </div>
       <div class="view-3d">
         <div class="view-actions">
-          <button class="fullscreen-btn" data-target="view3d" title="フルスクリーン" data-i18n-title="fullscreen-title">⛶</button>
+          <button class="fullscreen-btn" data-target="view3d" title="フルスクリーン" data-i18n-title="fullscreen-title"></button>
         </div>
         <button id="compass-toggle-3d" class="compass-fab" title="デバイスの向きに合わせる" data-i18n-title="compass-toggle-title" aria-pressed="false">
           <svg viewBox="0 0 24 24" class="compass-fab-icon">
@@ -111,7 +105,7 @@
       </div>
       <div class="view-2d">
         <div class="view-actions">
-          <button class="fullscreen-btn" data-target="view2d" title="フルスクリーン" data-i18n-title="fullscreen-title">⛶</button>
+          <button class="fullscreen-btn" data-target="view2d" title="フルスクリーン" data-i18n-title="fullscreen-title"></button>
         </div>
         <button id="compass-toggle-2d" class="compass-fab" title="デバイスの向きに合わせる" data-i18n-title="compass-toggle-title" aria-pressed="false">
           <svg viewBox="0 0 24 24" class="compass-fab-icon">
@@ -131,11 +125,10 @@
 
     <!-- SKY シーン -->
     <section id="scene-sky" class="sky-view" style="display: none">
-      <div class="view-title">
-        <span data-i18n="view-sky">SKY（ジャイロで天球内を見る）</span>
-        <button class="fullscreen-btn" data-target="skyview" title="フルスクリーン" data-i18n-title="fullscreen-title">⛶</button>
-      </div>
       <div id="ar-panel" class="ar-panel">
+        <div class="view-actions">
+          <button class="fullscreen-btn" data-target="skyview" title="フルスクリーン" data-i18n-title="fullscreen-title"></button>
+        </div>
         <video id="ar-video" hidden></video>
         <canvas id="ar-canvas" class="ar-canvas"></canvas>
         <div class="ar-hud">
@@ -152,11 +145,11 @@
       <div class="view-title">
         <span id="scale-scene-title">スケールモデル（距離・大きさを正確に再現）</span>
         <div class="view-title-actions">
-          <button id="scale-target-focus-btn" class="fullscreen-btn" title="対象にフォーカス (Enter/F)" data-i18n-title="scale-target-focus-title">🔍</button>
-          <button id="scale-target-system-btn" class="fullscreen-btn" title="対象の系全体を表示" data-i18n-title="scale-target-system-title">🌐</button>
-          <button id="scale-fit-btn" class="fullscreen-btn" title="全体を表示 (Home)" data-i18n-title="scale-fit-title">🏠</button>
+          <button id="scale-target-focus-btn" class="fullscreen-btn" title="対象にフォーカス (Enter/F)" data-i18n-title="scale-target-focus-title"></button>
+          <button id="scale-target-system-btn" class="fullscreen-btn" title="対象の系全体を表示" data-i18n-title="scale-target-system-title"></button>
+          <button id="scale-fit-btn" class="fullscreen-btn" title="全体を表示 (Home)" data-i18n-title="scale-fit-title"></button>
           <button id="scale-deform-toggle-btn" class="scale-mode-btn" title="実寸⇔デフォルメ表示の切り替え（実験的）" data-i18n-title="scale-deform-title">実寸</button>
-          <button class="fullscreen-btn" data-target="scale" title="フルスクリーン" data-i18n-title="fullscreen-title">⛶</button>
+          <button class="fullscreen-btn" data-target="scale" title="フルスクリーン" data-i18n-title="fullscreen-title"></button>
         </div>
       </div>
       <div class="scale-canvas-wrap">
@@ -180,17 +173,17 @@
       <div class="scale-playback-row">
         <!-- ステップ再生（issue-009）: 時/日/月の3段を常時表示し、シーク範囲に縛られず時刻そのものを移動する -->
         <div id="scale-step-back-b" class="scale-step-group">
-          <button class="step-btn" data-unit="month" data-dir="-1" title="1か月戻す">◀◀◀</button>
-          <button class="step-btn" data-unit="day" data-dir="-1" title="1日戻す">◀◀</button>
-          <button class="step-btn" data-unit="hour" data-dir="-1" title="1時間戻す">◀</button>
+          <button class="step-btn" data-unit="month" data-dir="-1" title="1か月戻す"></button>
+          <button class="step-btn" data-unit="day" data-dir="-1" title="1日戻す"></button>
+          <button class="step-btn" data-unit="hour" data-dir="-1" title="1時間戻す"></button>
         </div>
 
-        <button id="scale-play-btn" class="play-btn" title="再生/停止" data-i18n-title="play-title">▶</button>
+        <button id="scale-play-btn" class="play-btn" title="再生/停止" data-i18n-title="play-title"></button>
 
         <div id="scale-step-fwd-b" class="scale-step-group">
-          <button class="step-btn" data-unit="hour" data-dir="1" title="1時間進める">▶</button>
-          <button class="step-btn" data-unit="day" data-dir="1" title="1日進める">▶▶</button>
-          <button class="step-btn" data-unit="month" data-dir="1" title="1か月進める">▶▶▶</button>
+          <button class="step-btn" data-unit="hour" data-dir="1" title="1時間進める"></button>
+          <button class="step-btn" data-unit="day" data-dir="1" title="1日進める"></button>
+          <button class="step-btn" data-unit="month" data-dir="1" title="1か月進める"></button>
         </div>
       </div>
       <div class="seekbar-wrap">
@@ -201,21 +194,7 @@
       </div>
     </section>
 
-    <!-- 24hシークバー: SKY専用（スマホでの片手操作用） -->
-    <section id="scene-playback" class="playback" style="display: none">
-      <button id="play-btn" class="play-btn" title="24時間シミュレーション 再生/停止" data-i18n-title="play-title">▶</button>
-      <span class="playback-label">24h sim</span>
-      <div class="seekbar-wrap">
-        <div class="seekbar-track-row">
-          <input type="range" id="seekbar" min="0" max="1439" value="0" class="seekbar">
-        </div>
-        <div class="seekbar-ticks">
-          <span>0h</span><span>3h</span><span>6h</span><span>9h</span><span>12h</span><span>15h</span><span>18h</span><span>21h</span><span>24h</span>
-        </div>
-      </div>
-    </section>
-
-    <!-- 3D+2D専用の時間バー: 日/月/年モード切替（#scale-playbackと同UI）。SKYには影響しない -->
+    <!-- 3D+2D専用の時間バー: 日/月/年モード切替（#scale-playbackと同UI） -->
     <section id="dashboard-playback" class="playback" style="display: none">
       <div class="scale-playback-row">
         <div class="scale-mode-toggle" role="group" aria-label="時間モード">
@@ -227,17 +206,17 @@
       </div>
       <div class="scale-playback-row">
         <div id="dashboard-step-back-b" class="scale-step-group">
-          <button class="step-btn" data-unit="month" data-dir="-1" title="1か月戻す">◀◀◀</button>
-          <button class="step-btn" data-unit="day" data-dir="-1" title="1日戻す">◀◀</button>
-          <button class="step-btn" data-unit="hour" data-dir="-1" title="1時間戻す">◀</button>
+          <button class="step-btn" data-unit="month" data-dir="-1" title="1か月戻す"></button>
+          <button class="step-btn" data-unit="day" data-dir="-1" title="1日戻す"></button>
+          <button class="step-btn" data-unit="hour" data-dir="-1" title="1時間戻す"></button>
         </div>
 
-        <button id="dashboard-play-btn" class="play-btn" title="再生/停止" data-i18n-title="play-title">▶</button>
+        <button id="dashboard-play-btn" class="play-btn" title="再生/停止" data-i18n-title="play-title"></button>
 
         <div id="dashboard-step-fwd-b" class="scale-step-group">
-          <button class="step-btn" data-unit="hour" data-dir="1" title="1時間進める">▶</button>
-          <button class="step-btn" data-unit="day" data-dir="1" title="1日進める">▶▶</button>
-          <button class="step-btn" data-unit="month" data-dir="1" title="1か月進める">▶▶▶</button>
+          <button class="step-btn" data-unit="hour" data-dir="1" title="1時間進める"></button>
+          <button class="step-btn" data-unit="day" data-dir="1" title="1日進める"></button>
+          <button class="step-btn" data-unit="month" data-dir="1" title="1か月進める"></button>
         </div>
       </div>
       <div class="seekbar-wrap">
@@ -245,6 +224,39 @@
           <input type="range" id="dashboard-seekbar" min="0" max="1000" value="0" class="seekbar">
         </div>
         <div class="scale-seekbar-label" id="dashboard-sim-date-label">--</div>
+      </div>
+    </section>
+
+    <!-- SKY専用の時間バー: 3D+2Dと同じ日/月/年モードUI -->
+    <section id="sky-playback" class="playback" style="display: none">
+      <div class="scale-playback-row">
+        <div class="scale-mode-toggle" role="group" aria-label="時間モード">
+          <button id="sky-mode-day" class="scale-mode-btn" data-mode="day" data-i18n="scale-mode-day">日</button>
+          <button id="sky-mode-month" class="scale-mode-btn" data-mode="month" data-i18n="scale-mode-month">月</button>
+          <button id="sky-mode-year" class="scale-mode-btn" data-mode="year" data-i18n="scale-mode-year">年</button>
+        </div>
+        <button id="sky-now-btn" class="now-btn" title="現在時刻に戻す" data-i18n-title="now-title" data-i18n="now-btn">NOW</button>
+      </div>
+      <div class="scale-playback-row">
+        <div id="sky-step-back-b" class="scale-step-group">
+          <button class="step-btn" data-unit="month" data-dir="-1" title="1か月戻す"></button>
+          <button class="step-btn" data-unit="day" data-dir="-1" title="1日戻す"></button>
+          <button class="step-btn" data-unit="hour" data-dir="-1" title="1時間戻す"></button>
+        </div>
+
+        <button id="sky-play-btn" class="play-btn" title="再生/停止" data-i18n-title="play-title"></button>
+
+        <div id="sky-step-fwd-b" class="scale-step-group">
+          <button class="step-btn" data-unit="hour" data-dir="1" title="1時間進める"></button>
+          <button class="step-btn" data-unit="day" data-dir="1" title="1日進める"></button>
+          <button class="step-btn" data-unit="month" data-dir="1" title="1か月進める"></button>
+        </div>
+      </div>
+      <div class="seekbar-wrap">
+        <div class="seekbar-track-row">
+          <input type="range" id="sky-seekbar" min="0" max="1000" value="0" class="seekbar">
+        </div>
+        <div class="scale-seekbar-label" id="sky-sim-date-label">--</div>
       </div>
     </section>
   </main>
