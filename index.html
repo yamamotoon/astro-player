@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <link rel="icon" type="image/svg+xml" href="/astro-player/favicon.svg">
   <title>天空プレイヤー - 太陽・月位置シミュレーター</title>
-  <script type="module" crossorigin src="/astro-player/assets/index-fPn6-GAG.js"></script>
-  <link rel="stylesheet" crossorigin href="/astro-player/assets/index-CPHRE4Ix.css">
+  <script type="module" crossorigin src="/astro-player/assets/index-C87izWZI.js"></script>
+  <link rel="stylesheet" crossorigin href="/astro-player/assets/index-DZcPfpBY.css">
 </head>
 <body>
   <header>
@@ -34,7 +34,7 @@
       <button id="menu-scale-btn" class="menu-card">
         <span class="menu-card-icon">🌍</span>
         <span class="menu-card-title" data-i18n="nav-scale">スケール</span>
-        <span class="menu-card-desc" data-i18n="menu-scale-desc">地球・月・太陽の距離と大きさを正確に再現</span>
+        <span class="menu-card-desc" data-i18n="menu-scale-desc">太陽系の天体の大きさを並べて比較</span>
       </button>
       <button id="menu-dashboard-btn" class="menu-card">
         <span class="menu-card-icon">🪐</span>
@@ -138,7 +138,26 @@
       </div>
     </section>
 
-    <!-- スケールモデル シーン -->
+    <!-- 大きさ比較 シーン（メニューの「スケール」） -->
+    <section id="scene-size" class="scale-view" style="display: none">
+      <div class="scale-canvas-wrap">
+        <div class="view-actions">
+          <button id="size-view-btn" class="scale-view-btn" data-i18n="scale-view-btn">視点</button>
+          <button id="size-fit-btn" class="icon-btn" title="全体を表示 (Home)" data-i18n-title="scale-fit-title"></button>
+        </div>
+        <canvas id="canvas-size"></canvas>
+        <div id="size-labels" class="size-labels"></div>
+      </div>
+      <dialog id="size-view-dialog" class="scale-view-dialog">
+        <div class="scale-view-dialog-header">
+          <span data-i18n="scale-view-title">視点を選ぶ</span>
+          <button id="size-view-dialog-close" class="scale-view-dialog-close" aria-label="閉じる" data-i18n-aria-label="dialog-close">×</button>
+        </div>
+        <div id="size-view-list"></div>
+      </dialog>
+    </section>
+
+    <!-- スケールモデル シーン（地球の公転/自転） -->
     <section id="scene-scale" class="scale-view" style="display: none">
       <div class="scale-canvas-wrap">
         <div class="view-actions">
