@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <link rel="icon" type="image/svg+xml" href="/astro-player/favicon.svg">
   <title>天空プレイヤー - 太陽・月位置シミュレーター</title>
-  <script type="module" crossorigin src="/astro-player/assets/index-C87izWZI.js"></script>
-  <link rel="stylesheet" crossorigin href="/astro-player/assets/index-DZcPfpBY.css">
+  <script type="module" crossorigin src="/astro-player/assets/index-BkXb210O.js"></script>
+  <link rel="stylesheet" crossorigin href="/astro-player/assets/index-Brs1MjrM.css">
 </head>
 <body>
   <header>
@@ -58,16 +58,17 @@
             <input type="number" id="lat" value="35.6762" step="0.0001" min="-90" max="90">
             <span data-i18n="lng">経度</span>
             <input type="number" id="lng" value="139.6503" step="0.0001" min="-180" max="180">
+            <button id="locate-btn" class="locate-btn" data-i18n="locate-btn">現在地</button>
           </div>
         </div>
         <div class="control-group">
           <span id="const-toggles">
             <label class="realtime-label">
-              <input type="checkbox" id="show-constellations">
+              <input type="checkbox" id="show-constellations" checked>
               <span data-i18n="show-constellations">星座表示</span>
             </label>
             <label class="realtime-label">
-              <input type="checkbox" id="show-famous">
+              <input type="checkbox" id="show-famous" checked>
               <span data-i18n="show-famous">有名な星座</span>
             </label>
             <label class="realtime-label">
