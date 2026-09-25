@@ -5,6 +5,14 @@ import { setIcon } from './iconInjector'
 import frameAllIconSvg from './icons/frame-all.svg?raw'
 import earthTextureUrl from './assets/earth-texture.png'
 import moonTextureUrl from './assets/moon-texture.png'
+import mercuryTextureUrl from './assets/mercury-texture.png'
+import venusTextureUrl from './assets/venus-texture.png'
+import marsTextureUrl from './assets/mars-texture.png'
+import jupiterTextureUrl from './assets/jupiter-texture.png'
+import saturnTextureUrl from './assets/saturn-texture.png'
+import uranusTextureUrl from './assets/uranus-texture.png'
+import neptuneTextureUrl from './assets/neptune-texture.png'
+import plutoTextureUrl from './assets/pluto-texture.png'
 
 // 天体の大きさ比較ビュー（issue #013）。太陽系の天体を1列に並べ、大きさだけを実際の比率で見せる。
 // 距離は実際の値ではなく、見比べやすい一定の間隔で並べる。時間の要素は持たない（静止表示）。
@@ -25,16 +33,16 @@ interface SizeBody {
 
 const BODIES: Record<SizeBodyKey, SizeBody> = {
   sun:     { key: 'sun',     radius: 696.34,  color: 0xffdd55 },
-  mercury: { key: 'mercury', radius: 2.4397,  color: 0x9c9490 },
-  venus:   { key: 'venus',   radius: 6.0518,  color: 0xe8d4a0 },
+  mercury: { key: 'mercury', radius: 2.4397,  color: 0x9c9490, textureUrl: mercuryTextureUrl },
+  venus:   { key: 'venus',   radius: 6.0518,  color: 0xe8d4a0, textureUrl: venusTextureUrl },
   earth:   { key: 'earth',   radius: 6.371,   color: 0x5b9bff, textureUrl: earthTextureUrl },
   moon:    { key: 'moon',    radius: 1.7374,  color: 0xccd4ee, textureUrl: moonTextureUrl },
-  mars:    { key: 'mars',    radius: 3.3895,  color: 0xc1440e },
-  jupiter: { key: 'jupiter', radius: 69.911,  color: 0xd9b38c },
-  saturn:  { key: 'saturn',  radius: 58.232,  color: 0xe3cf9c, ring: { inner: 74.658, outer: 136.775, color: 0xcdbb8f } },
-  uranus:  { key: 'uranus',  radius: 25.362,  color: 0x9fd8e0 },
-  neptune: { key: 'neptune', radius: 24.622,  color: 0x4f7fd9 },
-  pluto:   { key: 'pluto',   radius: 1.1883,  color: 0xcdb9a5 },
+  mars:    { key: 'mars',    radius: 3.3895,  color: 0xc1440e, textureUrl: marsTextureUrl },
+  jupiter: { key: 'jupiter', radius: 69.911,  color: 0xd9b38c, textureUrl: jupiterTextureUrl },
+  saturn:  { key: 'saturn',  radius: 58.232,  color: 0xe3cf9c, textureUrl: saturnTextureUrl, ring: { inner: 74.658, outer: 136.775, color: 0xcdbb8f } },
+  uranus:  { key: 'uranus',  radius: 25.362,  color: 0x9fd8e0, textureUrl: uranusTextureUrl },
+  neptune: { key: 'neptune', radius: 24.622,  color: 0x4f7fd9, textureUrl: neptuneTextureUrl },
+  pluto:   { key: 'pluto',   radius: 1.1883,  color: 0xcdb9a5, textureUrl: plutoTextureUrl },
 }
 
 // 太陽の後ろに1列に並べる天体（太陽からの距離の順）。月は列に入れず地球の横に置く

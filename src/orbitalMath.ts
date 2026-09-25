@@ -105,6 +105,11 @@ export const REAL_INNER_PLANET_DIST: Record<InnerPlanetKey, number> = {
 export const INNER_PLANET_ORBIT_DAYS: Record<InnerPlanetKey, number> = {
   mercury: 87.969, venus: 224.701, mars: 686.980,
 }
+// 自転周期(日、恒星に対する周期)。負の値は逆向きの自転（金星は逆行自転）。
+// 地軸の傾きは考慮せず、公転面に垂直な軸(Y)周りに回す簡略表現
+export const INNER_PLANET_SPIN_DAYS: Record<InnerPlanetKey, number> = {
+  mercury: 58.646, venus: -243.025, mars: 1.025957,
+}
 
 // ---- デフォルメモード（issue #007。実験的）----
 // 実際の相対サイズ比(約109:1)のままだと「認識できる大きさ」と「重ならない」が両立しないため、

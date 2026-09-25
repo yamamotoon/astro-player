@@ -3,6 +3,9 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { t } from './i18n'
 import earthTextureUrl from './assets/earth-texture.png'
 import moonTextureUrl from './assets/moon-texture.png'
+import mercuryTextureUrl from './assets/mercury-texture.png'
+import venusTextureUrl from './assets/venus-texture.png'
+import marsTextureUrl from './assets/mars-texture.png'
 import { createSimPlaybackController, type SimMode, type SimPlaybackController } from './simPlayback'
 import { setIcon } from './iconInjector'
 import {
@@ -11,7 +14,7 @@ import {
   MOON_R, EARTH_R, SUN_R, MERCURY_R, VENUS_R, MARS_R,
   EARTH_MOON_DIST, EARTH_SUN_DIST,
   DEFORM_BODY_R, DEFORM_EARTH_MOON_DIST, DEFORM_SUN_EARTH_DIST,
-  REAL_INNER_PLANET_DIST, DEFORM_INNER_PLANET_DIST, INNER_PLANET_ORBIT_DAYS,
+  REAL_INNER_PLANET_DIST, DEFORM_INNER_PLANET_DIST, INNER_PLANET_ORBIT_DAYS, INNER_PLANET_SPIN_DAYS,
   SUN_POS, EARTH_POS, MOON_POS, INNER_PLANET_POS,
   EARTH_AXIS, MOON_SPIN_AXIS, MOON_ORBIT_TILT_QUAT,
 } from './orbitalMath'
@@ -303,16 +306,17 @@ export class ScaleModel3D {
     // 専用のテクスチャ画像は用意していないため、実際の見た目に近い単色球で代用する。
     // 衛星を持たない前提（火星の衛星は省略）で、地球のような自転軸傾斜・自転アニメーションも
     // 持たせず、太陽を周回する動きだけを表現する
-    const innerPlanetVisual: Record<typeof INNER_PLANET_KEYS[number], { radius: number; color: number }> = {
-      mercury: { radius: MERCURY_R, color: 0x9c9490 },
-      venus: { radius: VENUS_R, color: 0xe8d4a0 },
-      mars: { radius: MARS_R, color: 0xc1440e },
+    // テクスチャは大きさ比較ビューと共通（scripts/planet-texture/generate-planet-textures.pyで生成）
+    const innerPlanetVisual: Record<typeof INNER_PLANET_KEYS[number], { radius: number; textureUrl: string }> = {
+      mercury: { radius: MERCURY_R, textureUrl: mercuryTextureUrl },
+      venus: { radius: VENUS_R, textureUrl: venusTextureUrl },
+      mars: { radius: MARS_R, textureUrl: marsTextureUrl },
     }
     for (const key of INNER_PLANET_KEYS) {
-      const { radius, color } = innerPlanetVisual[key]
+      const { radius, textureUrl } = innerPlanetVisual[key]
       const mesh = new THREE.Mesh(
         new THREE.SphereGeometry(radius, 24, 18),
-        new THREE.MeshLambertMaterial({ color })
+        new THREE.MeshLambertMaterial({ map: new THREE.TextureLoader().load(textureUrl) })
       )
       mesh.position.copy(INNER_PLANET_POS[key])
       mesh.userData.radius = radius
@@ -732,6 +736,8 @@ export class ScaleModel3D {
     // 位置計算・同期自体は続ける。表示切替した瞬間に正しい位置になっている必要があるため）
     for (const key of INNER_PLANET_KEYS) {
       this.innerPlanetMeshByKey[key]!.position.copy(INNER_PLANET_POS[key])
+      // 自転: 時刻から角度を決める（Y軸周りの正の回転＝北から見て反時計回り＝順行）
+      this.innerPlanetMeshByKey[key]!.rotation.y = orbitalAngleFromEpoch(this.currentSimDate(), INNER_PLANET_SPIN_DAYS[key])
       this.innerPlanetOrbitLineByKey[key]!.scale.setScalar(
         this.deformMode ? DEFORM_INNER_PLANET_DIST[key] : REAL_INNER_PLANET_DIST[key]
       )
