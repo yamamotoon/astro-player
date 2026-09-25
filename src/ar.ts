@@ -4,6 +4,11 @@ import { t, getLang } from './i18n'
 import { positionToXYZ, raDecToAltAz, ZODIAC_CONSTELLATIONS, FAMOUS_CONSTELLATIONS } from './astroCalc'
 
 const R = 9
+// 太陽・月の半径。実物の見かけの直径(約0.5°、R=9換算で半径≒0.04)のままだと星の点とほぼ同じ大きさで
+// 見つけにくいため、6倍（見かけの直径約3°）に拡大して描く
+const SUN_MOON_RADIUS = 0.04 * 6
+// ラベルを天体の縁から離す距離
+const SUN_MOON_LABEL_GAP = 0.1
 const DRAG_DEG_PER_PX = 0.3
 
 export class ARView {
@@ -58,14 +63,13 @@ export class ARView {
     this.constGroup = new THREE.Group()
     this.scene.add(this.constGroup)
 
-    // 実物の見た目の角直径(約0.5°)に合わせたサイズ（R=9換算で半径≒0.04）
-    const sunGeo = new THREE.SphereGeometry(0.04, 16, 16)
+    const sunGeo = new THREE.SphereGeometry(SUN_MOON_RADIUS, 32, 24)
     this.sunMesh = new THREE.Mesh(sunGeo, new THREE.MeshBasicMaterial({ color: 0xffee44 }))
     this.scene.add(this.sunMesh)
     this.sunLabel = this.makeLabel(t('label-sun'), '#ffee44')
     this.scene.add(this.sunLabel)
 
-    const moonGeo = new THREE.SphereGeometry(0.04, 16, 16)
+    const moonGeo = new THREE.SphereGeometry(SUN_MOON_RADIUS, 32, 24)
     this.moonMesh = new THREE.Mesh(moonGeo, new THREE.MeshBasicMaterial({ color: 0xccd4ee }))
     this.scene.add(this.moonMesh)
     this.moonLabel = this.makeLabel(t('label-moon'), '#ccd4ee')
@@ -192,14 +196,14 @@ export class ARView {
   setData(data: AstroData, lat?: number, lng?: number, date?: Date) {
     const [sx, sy, sz] = positionToXYZ(data.sun.azimuthRad, data.sun.altitudeRad, R)
     this.sunMesh.position.set(sx, sy, sz)
-    this.sunLabel.position.set(sx, sy + 0.15, sz)
+    this.sunLabel.position.set(sx, sy + SUN_MOON_RADIUS + SUN_MOON_LABEL_GAP, sz)
     const sm = this.sunMesh.material as THREE.MeshBasicMaterial
     sm.opacity = data.sun.altitudeRad < 0 ? 0.3 : 1.0
     sm.transparent = data.sun.altitudeRad < 0
 
     const [mx, my, mz] = positionToXYZ(data.moon.azimuthRad, data.moon.altitudeRad, R)
     this.moonMesh.position.set(mx, my, mz)
-    this.moonLabel.position.set(mx, my + 0.13, mz)
+    this.moonLabel.position.set(mx, my + SUN_MOON_RADIUS + SUN_MOON_LABEL_GAP, mz)
     const mm = this.moonMesh.material as THREE.MeshBasicMaterial
     mm.opacity = data.moon.altitudeRad < 0 ? 0.3 : 1.0
     mm.transparent = data.moon.altitudeRad < 0
