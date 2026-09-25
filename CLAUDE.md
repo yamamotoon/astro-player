@@ -15,16 +15,18 @@ npm run preview  # ビルド結果のプレビュー
 ## アーキテクチャ
 
 SPA構成（1つの `index.html` / `main.ts`）。画面遷移は実際のページ遷移ではなく、`main.ts` の
-`showScene('menu' | 'dashboard' | 'sky' | 'scale')` によるシーンの表示切替（DOM要素の `display` 切替）で行う。
+`showScene('menu' | 'dashboard' | 'sky' | 'scale' | 'size')` によるシーンの表示切替（DOM要素の `display` 切替）で行う。
 
 ```
 main.ts
-  ├── showScene()       : メニュー / 3D+2D / SKY / スケールモデル のシーン切り替え・共有HUDの表示制御
+  ├── showScene()       : メニュー / 3D+2D / SKY / スケールモデル / 大きさ比較 のシーン切り替え・共有HUDの表示制御
   ├── scene3d.ts        : Three.js 3D天球シーン管理（星座・大三角形の描画・表示切替、観測者視点）
   ├── compass2d.ts      : HTML Canvas 2D方位図描画
   ├── ar.ts             : ジャイロ/手動操作のARスカイビュー（星座常時描画・ジャイロ→手動フォールバック）
-  ├── scaleModel3d.ts   : 地球・月・太陽の距離/大きさを実際の比率で正確に再現する比較用3Dモデル
+  ├── scaleModel3d.ts   : 地球の公転/自転ビューア。地球・月・太陽の距離/大きさを実際の比率で再現する3Dモデル
   │                       （星座は含まない。scene3d.tsとは独立した別モード）
+  ├── sizeComparison3d.ts : メニューの「スケール」。太陽系の天体を1列に並べて大きさを比較する
+  │                       （正投影カメラ・静止表示。scaleModel3d.tsとは独立）
   ├── astroCalc.ts      : SunCalc → 方位角/高度角/出入り時刻の計算
   │                       RA/Dec→Alt/Az 変換 (raDecToAltAz)
   │                       星座データ (ZODIAC_CONSTELLATIONS / FAMOUS_CONSTELLATIONS / BIG_TRIANGLES)

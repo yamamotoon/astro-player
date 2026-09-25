@@ -5,6 +5,7 @@ import { Compass2D } from './compass2d'
 import { getAstroData } from './astroCalc'
 import { ARView } from './ar'
 import { ScaleModel3D, type ScaleModelConfig } from './scaleModel3d'
+import { SizeComparison3D } from './sizeComparison3d'
 import { createSimPlaybackController } from './simPlayback'
 import { CompassHeadingTracker } from './compassHeading'
 import { setIcon } from './iconInjector'
@@ -12,7 +13,7 @@ import backIconSvg from './icons/back.svg?raw'
 import gearIconSvg from './icons/gear.svg?raw'
 import frameAllIconSvg from './icons/frame-all.svg?raw'
 
-type SceneName = 'menu' | 'dashboard' | 'sky' | 'scale'
+type SceneName = 'menu' | 'dashboard' | 'sky' | 'scale' | 'size'
 
 const latInput = document.getElementById('lat') as HTMLInputElement
 const lngInput = document.getElementById('lng') as HTMLInputElement
@@ -40,16 +41,13 @@ zoomSlider.addEventListener('input', () => {
   arView.setFov(parseFloat(zoomSlider.value))
 })
 
-// ---- スケール系モード（既存の「スケール」/ 地球の公転ビューア / 地球の自転ビューア） ----
-// 3つとも同じcanvas・同じDOM（#scene-scale, #scale-playback）を使い回す独立モード。
+// ---- スケール系モード（地球の公転ビューア / 地球の自転ビューア） ----
+// 2つとも同じcanvas・同じDOM（#scene-scale, #scale-playback）を使い回す独立モード。
 // 常に生きたインスタンスが1つだけになるようにする（=IDの衝突や多重描画が構造的に起きない）ため、
 // モードに入る/離れるたびに必ずdispose()してから作り直す（issue #008）
 const canvasScale = document.getElementById('canvas-scale') as HTMLCanvasElement
 let scaleModel: ScaleModel3D | null = null
 
-const SCALE_CONFIG_FULL: ScaleModelConfig = {
-  availableModes: ['day', 'month', 'year'], defaultMode: 'day', deformDefault: false, defaultTarget: 'sun',
-}
 const SCALE_CONFIG_ORBIT: ScaleModelConfig = {
   // 地球の公転ビューア: 地球の公転・月の動き（満ち欠け）が主役。日モードは出さない。
   // 注視点は太陽（原点で動かない）。地球を注視点にすると毎フレーム地球へ追従してしまい、
@@ -75,7 +73,18 @@ const scaleFitBtn = document.getElementById('scale-fit-btn') as HTMLButtonElemen
 setIcon(scaleFitBtn, frameAllIconSvg)
 scaleFitBtn.addEventListener('click', () => scaleModel?.frameAll())
 
-// ---- シーン切り替え（メニュー / 3D+2D / SKY / スケールモデル） ----
+// ---- 大きさ比較モード（メニューの「スケール」。issue #013） ----
+// スケール系モードと同じく、入るたびに作り直し、出る時に破棄する
+const canvasSize = document.getElementById('canvas-size') as HTMLCanvasElement
+let sizeView: SizeComparison3D | null = null
+
+function enterSizeMode() {
+  sizeView?.dispose()
+  sizeView = new SizeComparison3D(canvasSize)
+  showScene('size', 'nav-scale')
+}
+
+// ---- シーン切り替え（メニュー / 3D+2D / SKY / スケールモデル / 大きさ比較） ----
 const sceneMenu = document.getElementById('scene-menu') as HTMLElement
 const sceneHud = document.getElementById('scene-hud') as HTMLElement
 const skyPlaybackSection = document.getElementById('sky-playback') as HTMLElement
@@ -84,6 +93,7 @@ const scalePlayback = document.getElementById('scale-playback') as HTMLElement
 const sceneDashboard = document.getElementById('scene-dashboard') as HTMLElement
 const sceneSky = document.getElementById('scene-sky') as HTMLElement
 const sceneScale = document.getElementById('scene-scale') as HTMLElement
+const sceneSize = document.getElementById('scene-size') as HTMLElement
 const constToggles = document.getElementById('const-toggles') as HTMLElement
 const scaleDisplayGroup = document.getElementById('scale-display-group') as HTMLElement
 const backToMenuBtn = document.getElementById('back-to-menu-btn') as HTMLButtonElement
@@ -114,10 +124,14 @@ function showScene(name: SceneName, titleKey: string = 'h1') {
     scaleModel.dispose()
     scaleModel = null
   }
+  if (name !== 'size' && sizeView) {
+    sizeView.dispose()
+    sizeView = null
+  }
 
   setHeaderTitle(titleKey)
 
-  const showHud = name !== 'menu'
+  const showHud = name !== 'menu' && name !== 'size'
   sceneMenu.style.display = name === 'menu' ? '' : 'none'
   sceneHud.style.display = showHud ? '' : 'none'
   skyPlaybackSection.style.display = name === 'sky' ? '' : 'none'
@@ -125,6 +139,7 @@ function showScene(name: SceneName, titleKey: string = 'h1') {
   sceneDashboard.style.display = name === 'dashboard' ? '' : 'none'
   sceneSky.style.display = name === 'sky' ? '' : 'none'
   sceneScale.style.display = name === 'scale' ? '' : 'none'
+  sceneSize.style.display = name === 'size' ? '' : 'none'
   scalePlayback.style.display = name === 'scale' ? '' : 'none'
   constToggles.style.display = name === 'dashboard' ? '' : 'none'
   scaleDisplayGroup.style.display = name === 'scale' ? '' : 'none'
@@ -245,7 +260,7 @@ menuSkyBtn.addEventListener('click', () => {
   showScene('sky', 'nav-sky')
   arView.start(arCanvas)
 })
-menuScaleBtn.addEventListener('click', () => enterScaleMode(SCALE_CONFIG_FULL, 'nav-scale'))
+menuScaleBtn.addEventListener('click', enterSizeMode)
 menuScaleOrbitBtn.addEventListener('click', () => enterScaleMode(SCALE_CONFIG_ORBIT, 'nav-scale-orbit'))
 menuScaleSpinBtn.addEventListener('click', () => enterScaleMode(SCALE_CONFIG_SPIN, 'nav-scale-spin'))
 backToMenuBtn.addEventListener('click', () => showScene('menu'))
@@ -338,6 +353,7 @@ langBtn.addEventListener('click', () => {
   scene3d.refreshTextLabels()
   arView.refreshDirLabels()
   scaleModel?.refreshTextLabels()
+  sizeView?.refreshTextLabels()
   headerTitle.textContent = t(headerTitleKey)
 })
 
