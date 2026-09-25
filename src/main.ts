@@ -195,12 +195,24 @@ function isCompassActive(): boolean {
   return compass3dEnabled || compass2dEnabled
 }
 
-// 針は「北」を指し続ける。画面(headingDeg方向を正面)がheadingDeg分回転して
-// 見えているぶん、北を指す針は見た目上その逆方向へ回転させる
-function applyCompassNeedleRotation() {
-  const rotate = `rotate(${-compassHeadingDeg}deg)`
-  if (compass3dEnabled) compassIcon3d.style.transform = rotate
-  if (compass2dEnabled) compassIcon2d.style.transform = rotate
+// 針は「北」を指し続ける。画面がheadingDeg方向を正面にしているぶん、北を指す針は見た目上その逆方向へ回転させる。
+// 3Dは方位磁石モードON/OFFに関わらず、常にカメラの向きだけから針を決める（端末の向きはカメラ経由で反映される）
+// 角度は前回からの差分で積み上げる（±180°をまたいだ時に、CSSのtransitionで針が逆回りに一周しないように）
+let compassNeedleDeg3d = 0
+function updateCompassNeedle3d() {
+  const delta = normalizeDeltaDeg(-scene3d.getCameraHeadingDeg() - compassNeedleDeg3d)
+  compassNeedleDeg3d += delta
+  compassIcon3d.style.transform = `rotate(${compassNeedleDeg3d}deg)`
+}
+/** 角度差を -180〜180 に正規化する */
+function normalizeDeltaDeg(deg: number): number {
+  return ((deg % 360) + 540) % 360 - 180
+}
+scene3d.onCameraChange(updateCompassNeedle3d)
+updateCompassNeedle3d()
+
+function applyCompassNeedleRotation2d() {
+  if (compass2dEnabled) compassIcon2d.style.transform = `rotate(${-compassHeadingDeg}deg)`
 }
 
 async function setCompassEnabled(view: DashboardView, enabled: boolean) {
@@ -216,14 +228,14 @@ async function setCompassEnabled(view: DashboardView, enabled: boolean) {
   }
   btn.classList.toggle('active', enabled)
   btn.setAttribute('aria-pressed', String(enabled))
-  if (!enabled) icon.style.transform = ''
+  if (view === '2d' && !enabled) icon.style.transform = ''
 
   if (isCompassActive() && !compassTracker) {
     const tracker = new CompassHeadingTracker((heading) => {
       compassHeadingDeg = heading
       if (compass3dEnabled) scene3d.setCompassHeading(compassHeadingDeg)
       if (compass2dEnabled) updateDashboard(dashboardCurrentDate)
-      applyCompassNeedleRotation()
+      applyCompassNeedleRotation2d()
     })
     const ok = await tracker.start()
     if (!ok) {
@@ -308,6 +320,34 @@ function onLocationInput() {
 }
 latInput.addEventListener('input', onLocationInput)
 lngInput.addEventListener('input', onLocationInput)
+
+// 端末の位置情報から緯度・経度を入れる。入力欄の刻み(0.0001)に合わせて丸める
+const locateBtn = document.getElementById('locate-btn') as HTMLButtonElement
+locateBtn.addEventListener('click', () => {
+  if (!navigator.geolocation) {
+    alert(t('locate-error'))
+    return
+  }
+  locateBtn.disabled = true
+  locateBtn.textContent = t('locate-btn-busy')
+  const done = () => {
+    locateBtn.disabled = false
+    locateBtn.textContent = t('locate-btn')
+  }
+  navigator.geolocation.getCurrentPosition(
+    (pos) => {
+      latInput.value = pos.coords.latitude.toFixed(4)
+      lngInput.value = pos.coords.longitude.toFixed(4)
+      onLocationInput()
+      done()
+    },
+    () => {
+      done()
+      alert(t('locate-error'))
+    },
+    { enableHighAccuracy: false, timeout: 15000, maximumAge: 60000 }
+  )
+})
 constCheck.addEventListener('change', () => {
   scene3d.setConstellationsVisible(constCheck.checked)
   if (constCheck.checked) updateDashboard(dashboardCurrentDate)
@@ -320,6 +360,10 @@ trianglesCheck.addEventListener('change', () => {
   scene3d.setTrianglesVisible(trianglesCheck.checked)
   if (trianglesCheck.checked) updateDashboard(dashboardCurrentDate)
 })
+// 起動時のチェック状態（星座表示・有名な星座は初期ON）を3D側の表示に反映する
+scene3d.setConstellationsVisible(constCheck.checked)
+scene3d.setFamousVisible(famousCheck.checked)
+scene3d.setTrianglesVisible(trianglesCheck.checked)
 
 // ---- 設定パネル 折りたたみ ----
 const controlsSection = document.querySelector('.controls') as HTMLElement

@@ -203,6 +203,21 @@ export class Scene3D {
   }
 
   /**
+   * カメラが正面に見ている方角（北基準・時計回り、0=北）。setCompassHeading()の逆算で、
+   * target→cameraのオフセットのthetaが -headingRad になる関係から求める
+   */
+  getCameraHeadingDeg(): number {
+    const offset = new THREE.Vector3().subVectors(this.camera.position, this.controls.target)
+    const theta = new THREE.Spherical().setFromVector3(offset).theta
+    return -THREE.MathUtils.radToDeg(theta)
+  }
+
+  /** カメラの向き・位置が変わるたびに呼ぶ（ドラッグ・慣性・方位磁石モードのどれでも） */
+  onCameraChange(callback: () => void) {
+    this.controls.addEventListener('change', callback)
+  }
+
+  /**
    * 方位磁石モードのON/OFFに合わせて、OrbitControlsの水平方向(azimuthal)
    * ドラッグだけを禁止/許可する。上下方向のドラッグは常に許可したままにする
    * （OrbitControlsにazimuthとpolarを個別にdisableするAPIは無いため、

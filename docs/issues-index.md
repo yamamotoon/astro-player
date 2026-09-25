@@ -16,6 +16,8 @@
 | [011](issue-011-scale-location-marker.md) | スケールモデルの位置マーカーを設定パネルの場所に連動させる | 実装済み。動作確認待ち |
 | [012](issue-012-scale-view-dialog.md) | スケール系画面の視点をダイアログで選べるようにする | 実装済み。ボタン廃止の動作確認待ち |
 | [013](issue-013-scale-size-comparison.md) | 「スケール」画面を天体の大きさ比較ビューに作り直す | 実装済み。動作確認待ち |
+| [014](issue-014-sky-sun-moon-size.md) | SKYモードの太陽・月を大きく表示する | 実装・確認済み |
+| [015](issue-015-3d-compass-needle-follows-camera.md) | 3Dのコンパスボタンの針をカメラの向きに連動させる | 実装済み。動作確認待ち |
 
 `scale-model-3d-handover.md`は個別issueではなく、スケールモデル機能全体の生きた状態サマリなので
 番号を振らない。

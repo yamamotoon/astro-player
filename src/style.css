@@ -257,6 +257,26 @@ input[type="number"] {
   width: 96px;
 }
 
+.locate-btn {
+  background: #12122e;
+  border: 1px solid #2a2a4a;
+  color: #a0c0ff;
+  padding: 3px 10px;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.locate-btn:hover {
+  border-color: #3a5a9e;
+}
+
+.locate-btn:disabled {
+  color: #5a6680;
+  cursor: default;
+}
+
 .realtime-label {
   display: flex;
   align-items: center;
