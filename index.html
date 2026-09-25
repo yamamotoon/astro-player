@@ -75,6 +75,13 @@
             </label>
           </span>
         </div>
+        <div id="scale-display-group" class="control-group">
+          <label data-i18n="scale-display">表示</label>
+          <div class="scale-mode-toggle" role="group">
+            <button id="scale-deform-real-btn" class="scale-mode-btn" data-i18n="scale-deform-real">実比率</button>
+            <button id="scale-deform-deform-btn" class="scale-mode-btn" data-i18n="scale-deform-deform">見やすく</button>
+          </div>
+        </div>
       </section>
     </section>
 
@@ -85,9 +92,6 @@
         <button id="view-toggle-2d" class="view-toggle-btn" data-view="2d" data-i18n="view-2d">2D 方位図</button>
       </div>
       <div class="view-3d">
-        <div class="view-actions">
-          <button class="fullscreen-btn" data-target="view3d" title="フルスクリーン" data-i18n-title="fullscreen-title"></button>
-        </div>
         <button id="compass-toggle-3d" class="compass-fab" title="デバイスの向きに合わせる" data-i18n-title="compass-toggle-title" aria-pressed="false">
           <svg viewBox="0 0 24 24" class="compass-fab-icon">
             <circle cx="12" cy="12" r="10.5" class="compass-fab-ring" />
@@ -103,9 +107,6 @@
         <canvas id="canvas3d"></canvas>
       </div>
       <div class="view-2d">
-        <div class="view-actions">
-          <button class="fullscreen-btn" data-target="view2d" title="フルスクリーン" data-i18n-title="fullscreen-title"></button>
-        </div>
         <button id="compass-toggle-2d" class="compass-fab" title="デバイスの向きに合わせる" data-i18n-title="compass-toggle-title" aria-pressed="false">
           <svg viewBox="0 0 24 24" class="compass-fab-icon">
             <circle cx="12" cy="12" r="10.5" class="compass-fab-ring" />
@@ -125,9 +126,6 @@
     <!-- SKY シーン -->
     <section id="scene-sky" class="sky-view" style="display: none">
       <div id="ar-panel" class="ar-panel">
-        <div class="view-actions">
-          <button class="fullscreen-btn" data-target="skyview" title="フルスクリーン" data-i18n-title="fullscreen-title"></button>
-        </div>
         <video id="ar-video" hidden></video>
         <canvas id="ar-canvas" class="ar-canvas"></canvas>
         <div class="ar-hud">
@@ -139,21 +137,15 @@
       </div>
     </section>
 
-    <!-- スケールモデル シーン（独立画面。設定パネル・シークバーは使わない） -->
+    <!-- スケールモデル シーン -->
     <section id="scene-scale" class="scale-view" style="display: none">
-      <div class="view-title">
-        <span id="scale-scene-title">スケールモデル（距離・大きさを正確に再現）</span>
-        <div class="view-title-actions">
-          <button id="scale-target-focus-btn" class="fullscreen-btn" title="対象にフォーカス (Enter/F)" data-i18n-title="scale-target-focus-title"></button>
-          <button id="scale-target-system-btn" class="fullscreen-btn" title="対象の系全体を表示" data-i18n-title="scale-target-system-title"></button>
-          <button id="scale-fit-btn" class="fullscreen-btn" title="全体を表示 (Home)" data-i18n-title="scale-fit-title"></button>
-          <button id="scale-deform-toggle-btn" class="scale-mode-btn" title="実寸⇔デフォルメ表示の切り替え（実験的）" data-i18n-title="scale-deform-title">実寸</button>
-          <button class="fullscreen-btn" data-target="scale" title="フルスクリーン" data-i18n-title="fullscreen-title"></button>
-        </div>
-      </div>
       <div class="scale-canvas-wrap">
+        <div class="view-actions">
+          <button id="scale-target-focus-btn" class="icon-btn" title="対象にフォーカス (Enter/F)" data-i18n-title="scale-target-focus-title"></button>
+          <button id="scale-target-system-btn" class="icon-btn" title="対象の系全体を表示" data-i18n-title="scale-target-system-title"></button>
+          <button id="scale-fit-btn" class="icon-btn" title="全体を表示 (Home)" data-i18n-title="scale-fit-title"></button>
+        </div>
         <canvas id="canvas-scale"></canvas>
-        <div id="scale-date-hud" class="scale-date-hud">--</div>
         <pre id="scale-debug-hud" class="scale-debug-hud"></pre>
         <canvas id="scale-angle-gizmo" class="scale-angle-gizmo" width="96" height="96"></canvas>
       </div>

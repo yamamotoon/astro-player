@@ -10,8 +10,6 @@ import { CompassHeadingTracker } from './compassHeading'
 import { setIcon } from './iconInjector'
 import backIconSvg from './icons/back.svg?raw'
 import gearIconSvg from './icons/gear.svg?raw'
-import fullscreenExpandIconSvg from './icons/fullscreen-expand.svg?raw'
-import fullscreenCollapseIconSvg from './icons/fullscreen-collapse.svg?raw'
 import frameAllIconSvg from './icons/frame-all.svg?raw'
 
 type SceneName = 'menu' | 'dashboard' | 'sky' | 'scale'
@@ -65,17 +63,11 @@ const SCALE_CONFIG_SPIN: ScaleModelConfig = {
   availableModes: ['day', 'month'], defaultMode: 'day', deformDefault: true, defaultTarget: 'earth',
 }
 
-// 画面タイトル(#scale-scene-title)は3つの入口で共有しているDOMなので、入る時に文言を出し分ける。
-// data-i18n属性は付けない（つけるとapplyLang()の一括スイープで固定文言に戻されてしまうため）。
-// 言語切替時にも今のモードの文言で出し直せるよう、キー自体も覚えておく
-const scaleSceneTitle = document.getElementById('scale-scene-title') as HTMLElement
-let scaleSceneTitleKey = 'view-scale'
-
-function enterScaleMode(config: ScaleModelConfig, titleKey: string, navTitleKey: string) {
+function enterScaleMode(config: ScaleModelConfig, navTitleKey: string) {
   scaleModel?.dispose()
   scaleModel = new ScaleModel3D(canvasScale, config)
-  scaleSceneTitle.textContent = t(titleKey)
-  scaleSceneTitleKey = titleKey
+  const { lat, lng } = getLatLng()
+  scaleModel.setLocation(lat, lng)
   showScene('scale', navTitleKey)
 }
 
@@ -93,6 +85,7 @@ const sceneDashboard = document.getElementById('scene-dashboard') as HTMLElement
 const sceneSky = document.getElementById('scene-sky') as HTMLElement
 const sceneScale = document.getElementById('scene-scale') as HTMLElement
 const constToggles = document.getElementById('const-toggles') as HTMLElement
+const scaleDisplayGroup = document.getElementById('scale-display-group') as HTMLElement
 const backToMenuBtn = document.getElementById('back-to-menu-btn') as HTMLButtonElement
 setIcon(backToMenuBtn, backIconSvg)
 const toggleControlsBtn = document.getElementById('toggle-controls') as HTMLButtonElement
@@ -124,7 +117,7 @@ function showScene(name: SceneName, titleKey: string = 'h1') {
 
   setHeaderTitle(titleKey)
 
-  const showHud = name === 'dashboard' || name === 'sky'
+  const showHud = name !== 'menu'
   sceneMenu.style.display = name === 'menu' ? '' : 'none'
   sceneHud.style.display = showHud ? '' : 'none'
   skyPlaybackSection.style.display = name === 'sky' ? '' : 'none'
@@ -134,10 +127,10 @@ function showScene(name: SceneName, titleKey: string = 'h1') {
   sceneScale.style.display = name === 'scale' ? '' : 'none'
   scalePlayback.style.display = name === 'scale' ? '' : 'none'
   constToggles.style.display = name === 'dashboard' ? '' : 'none'
+  scaleDisplayGroup.style.display = name === 'scale' ? '' : 'none'
   backToMenuBtn.hidden = name === 'menu'
   toggleControlsBtn.hidden = !showHud
   if (name !== 'sky') arView.stop()
-  if (document.fullscreenElement) document.exitFullscreen()
   if (name === 'dashboard') {
     // 非表示中はサイズ0で解像度が決まらないため、表示直後に再計算する。
     // 画面を開くたび毎回、天球が確実に収まる距離まで自動調整する
@@ -252,9 +245,9 @@ menuSkyBtn.addEventListener('click', () => {
   showScene('sky', 'nav-sky')
   arView.start(arCanvas)
 })
-menuScaleBtn.addEventListener('click', () => enterScaleMode(SCALE_CONFIG_FULL, 'view-scale', 'nav-scale'))
-menuScaleOrbitBtn.addEventListener('click', () => enterScaleMode(SCALE_CONFIG_ORBIT, 'view-scale-orbit', 'nav-scale-orbit'))
-menuScaleSpinBtn.addEventListener('click', () => enterScaleMode(SCALE_CONFIG_SPIN, 'view-scale-spin', 'nav-scale-spin'))
+menuScaleBtn.addEventListener('click', () => enterScaleMode(SCALE_CONFIG_FULL, 'nav-scale'))
+menuScaleOrbitBtn.addEventListener('click', () => enterScaleMode(SCALE_CONFIG_ORBIT, 'nav-scale-orbit'))
+menuScaleSpinBtn.addEventListener('click', () => enterScaleMode(SCALE_CONFIG_SPIN, 'nav-scale-spin'))
 backToMenuBtn.addEventListener('click', () => showScene('menu'))
 
 // ---- 天体位置の共通更新処理 ----
@@ -292,14 +285,14 @@ function updateSky(date: Date) {
   arView.setData(data, lat, lng, date)
 }
 
-latInput.addEventListener('input', () => {
+function onLocationInput() {
   updateDashboard(dashboardCurrentDate)
   updateSky(skyCurrentDate)
-})
-lngInput.addEventListener('input', () => {
-  updateDashboard(dashboardCurrentDate)
-  updateSky(skyCurrentDate)
-})
+  const { lat, lng } = getLatLng()
+  scaleModel?.setLocation(lat, lng)
+}
+latInput.addEventListener('input', onLocationInput)
+lngInput.addEventListener('input', onLocationInput)
 constCheck.addEventListener('change', () => {
   scene3d.setConstellationsVisible(constCheck.checked)
   if (constCheck.checked) updateDashboard(dashboardCurrentDate)
@@ -311,35 +304,6 @@ famousCheck.addEventListener('change', () => {
 trianglesCheck.addEventListener('change', () => {
   scene3d.setTrianglesVisible(trianglesCheck.checked)
   if (trianglesCheck.checked) updateDashboard(dashboardCurrentDate)
-})
-
-// ---- フルスクリーン ----
-const mainEl = document.querySelector('main') as HTMLElement
-
-document.querySelectorAll<HTMLButtonElement>('.fullscreen-btn[data-target]').forEach(btn => {
-  setIcon(btn, fullscreenExpandIconSvg)
-  btn.addEventListener('click', () => {
-    if (!document.fullscreenElement) {
-      mainEl.dataset.fs = btn.dataset.target ?? ''
-      mainEl.requestFullscreen().catch(() => {})
-      setIcon(btn, fullscreenCollapseIconSvg)
-    } else {
-      document.exitFullscreen()
-    }
-  })
-})
-
-document.addEventListener('fullscreenchange', () => {
-  if (!document.fullscreenElement) {
-    delete mainEl.dataset.fs
-    document.querySelectorAll<HTMLButtonElement>('.fullscreen-btn[data-target]').forEach(b => {
-      setIcon(b, fullscreenExpandIconSvg)
-    })
-    scene3d.handleResize()
-  } else {
-    // フルスクリーン直後にThree.jsをリサイズ
-    requestAnimationFrame(() => scene3d.handleResize())
-  }
 })
 
 // ---- 設定パネル 折りたたみ ----
@@ -374,7 +338,6 @@ langBtn.addEventListener('click', () => {
   scene3d.refreshTextLabels()
   arView.refreshDirLabels()
   scaleModel?.refreshTextLabels()
-  scaleSceneTitle.textContent = t(scaleSceneTitleKey) // data-i18n化していないので手動で出し直す
   headerTitle.textContent = t(headerTitleKey)
 })
 

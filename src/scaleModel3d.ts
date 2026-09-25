@@ -18,13 +18,12 @@ import {
   EARTH_AXIS, MOON_SPIN_AXIS, MOON_ORBIT_TILT_QUAT,
 } from './orbitalMath'
 
-// 地球儀上の位置マーカー（東京）。アプリの緯度経度入力欄の既定値(index.html #lat/#lng)と同じ
-const TOKYO_LAT_DEG = 35.6762
-const TOKYO_LON_DEG = 139.6503
 // マーカー(円錐)の大きさ。地球メッシュの子として実寸半径(EARTH_R)基準で置くので、
 // デフォルメ時の拡大縮小(applyDeformVisuals()のscale)にも自動で追従する
-const MARKER_HEIGHT = 0.5
-const MARKER_RADIUS = 0.15
+const MARKER_HEIGHT = 2.0
+const MARKER_RADIUS = 0.6
+// 太陽光の陰影を若干だけ付けるための自己発光の強さ（0〜1）。大きいほど陰影が弱く、夜側でも明るく見える
+const MARKER_EMISSIVE_INTENSITY = 0.7
 
 type BodyKey = 'sun' | InnerPlanetKey | 'earth' | 'moon'
 // 表示/非表示に関わらず全天体。scale適用など「見えているかは関係なく全部そろえておきたい」処理で使う
@@ -104,9 +103,6 @@ export class ScaleModel3D {
   // dispose()で必ず止める（モード切替のたびに作り直す運用のため。issue #004/#008）
   private simPlaybackController!: SimPlaybackController
 
-  // 画面上部中央に常時表示する、現在シミュレーションしている日時（シークバー横の小さいラベルとは別）
-  private dateHudEl = document.getElementById('scale-date-hud') as HTMLElement
-
   // カメラの向きインジケーター: メインの3Dワールドとは独立した固定サイズのミニビューポートに
   // 座標軸モデルを描画し、メインカメラの「向き」だけを毎フレーム同期する（位置・ズームは無視）
   private gizmoScene: THREE.Scene
@@ -150,7 +146,10 @@ export class ScaleModel3D {
   // 実寸⇔デフォルメの切替のみで、中間の倍率は持たない（過去の連続スライダー案は撤去。
   // backup/deform-distance-scale-wipブランチ参照）
   private deformMode = false
-  private deformToggleBtn = document.getElementById('scale-deform-toggle-btn') as HTMLButtonElement
+  private locationMarker: THREE.Mesh
+
+  private deformRealBtn = document.getElementById('scale-deform-real-btn') as HTMLButtonElement
+  private deformDeformBtn = document.getElementById('scale-deform-deform-btn') as HTMLButtonElement
 
   // 対象の天体へのカメラ追従（issue #005）。前フレームの位置との差分だけ注視点・カメラ位置の
   // 両方に加算する「平行移動」方式。対象が変わった瞬間はhandleTap()側でnullにリセットされ、
@@ -262,23 +261,15 @@ export class ScaleModel3D {
     this.earthMesh.quaternion.copy(this.earthTiltQuaternion)
     this.scene.add(this.earthMesh)
 
-    // 東京の位置マーカー（円錐）。earthMeshの子にすることで、自転・公転・デフォルメの
-    // 拡大縮小すべてに自動で追従する（別途フレームごとに位置を更新する必要がない）
-    const tokyoDir = localDirForLatLon(
-      THREE.MathUtils.degToRad(TOKYO_LAT_DEG), THREE.MathUtils.degToRad(TOKYO_LON_DEG)
-    )
-    const tokyoMarker = new THREE.Mesh(
+    // 位置マーカー（円錐）。earthMeshの子にすることで、自転・公転・デフォルメの
+    // 拡大縮小すべてに自動で追従する。置く位置はsetLocation()で決める
+    this.locationMarker = new THREE.Mesh(
       new THREE.ConeGeometry(MARKER_RADIUS, MARKER_HEIGHT, 12),
-      new THREE.MeshBasicMaterial({ color: 0xff3b3b })
+      new THREE.MeshLambertMaterial({
+        color: 0xff3b3b, emissive: 0xff3b3b, emissiveIntensity: MARKER_EMISSIVE_INTENSITY,
+      })
     )
-    // 先端(頂点)がピンポイントで地表に接し、底面が外側に広がる「逆さの円錐」にする。
-    // meshの中心位置はさっきと同じ式のままでよい（向きを反転した分、先端が内側(EARTH_R)、
-    // 底面が外側(EARTH_R+MARKER_HEIGHT)に来るよう自動的にずれる）
-    tokyoMarker.position.copy(tokyoDir).multiplyScalar(EARTH_R + MARKER_HEIGHT / 2)
-    // ConeGeometryは既定でローカル+Y方向が底面→先端。地表の法線(tokyoDir)の「逆向き」に
-    // 先端を向けることで、先端が地球の中心側＝地表のピンポイントを指すようにする
-    tokyoMarker.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), tokyoDir.clone().negate())
-    this.earthMesh.add(tokyoMarker)
+    this.earthMesh.add(this.locationMarker)
 
     // 地球の自転軸（デバッグ表示）: 公転軸(Y)から実際の地軸傾斜23.44度だけ傾いた向きに描画する。
     // 主役の天体・ラベルより控えめに見えるよう、短め・半透明の細い線にしている
@@ -414,7 +405,7 @@ export class ScaleModel3D {
       mercury: MERCURY_R, venus: VENUS_R, mars: MARS_R,
     }
     // config.deformDefault=trueで起動した場合、ここでメッシュのscale・カメラの最小ズーム距離を
-    // 最初から合わせておく（toggleDeformMode()参照。実寸起動時はscale=1になるだけで無害）
+    // 最初から合わせておく（setDeformMode()参照。実寸起動時はscale=1になるだけで無害）
     this.applyDeformVisuals()
     this.outlineByKey = {
       sun: this.makeOutlineHull(this.sunMesh),
@@ -513,7 +504,8 @@ export class ScaleModel3D {
     this.on(this.targetSystemBtn, 'click', () => this.focusOnSystemView())
 
     // デフォルメモード切り替え（実験的機能）
-    this.on(this.deformToggleBtn, 'click', () => this.toggleDeformMode())
+    this.on(this.deformRealBtn, 'click', () => this.setDeformMode(false))
+    this.on(this.deformDeformBtn, 'click', () => this.setDeformMode(true))
     this.updateDeformButtonUI()
 
     // 時間バー: 日/月/年切り替え・シークバー・再生/停止（issue #004）。3D+2D/SKYと共通の
@@ -523,7 +515,6 @@ export class ScaleModel3D {
       'scale',
       (date) => {
         this.currentSimDateValue = date
-        this.dateHudEl.textContent = ScaleModel3D.formatSimDateFull(date)
       },
       { defaultMode: config.defaultMode, availableModes: config.availableModes }
     )
@@ -535,7 +526,10 @@ export class ScaleModel3D {
     this.focusOnSystemView()
     this.updateTargetButtonsUI()
 
-    this.on(window, 'resize', () => this.handleResize())
+    // ウィンドウだけでなく設定パネルの開閉でも描画領域の大きさが変わるため、親要素を直接監視する
+    const resizeObserver = new ResizeObserver(() => this.handleResize())
+    resizeObserver.observe(canvas.parentElement!)
+    this.cleanupFns.push(() => resizeObserver.disconnect())
     this.startLoop()
   }
 
@@ -763,13 +757,6 @@ export class ScaleModel3D {
     this.earthMesh.quaternion.copy(spinQuat).multiply(this.earthTiltQuaternion)
   }
 
-  /** 画面上部の常時表示HUD用: 「今どの時点の天体を見ているか」を明確にするため、モードに関わらず
-   *  常に時刻まで表示する（simPlayback.ts側の下部シークバー横ラベルとは役割が異なる） */
-  private static formatSimDateFull(date: Date): string {
-    const pad = (n: number) => String(n).padStart(2, '0')
-    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`
-  }
-
   // ラベルの当たり判定は常に画面上一定サイズの箱として扱う（本体をタップするより少し広めに取り、
   // 特にモバイルでの指での操作をしやすくする）
   private static readonly LABEL_HIT_PADDING = 1.5
@@ -869,8 +856,9 @@ export class ScaleModel3D {
    * 輪郭殻(outlineByKey)は本体メッシュの子オブジェクトのため、親のscaleにより見た目の拡大は
    * 自動的に追従する（updateLabels()側で輪郭線の太さだけ補正が必要。該当箇所のコメント参照）
    */
-  private toggleDeformMode() {
-    this.deformMode = !this.deformMode
+  private setDeformMode(deform: boolean) {
+    if (deform === this.deformMode) return
+    this.deformMode = deform
     this.applyDeformVisuals()
     this.updateDeformButtonUI()
 
@@ -882,10 +870,8 @@ export class ScaleModel3D {
 
   /**
    * 現在のthis.deformModeに、天体メッシュのscale・地軸線のscale・カメラの最小ズーム距離を合わせる。
-   * toggleDeformMode()（実験的機能。手動切替時）と、コンストラクタ（ScaleModelConfig.deformDefault=
-   * trueで最初からデフォルメ起動する時）の両方から呼ぶ。片方だけ（toggleDeformMode内）に書いて
-   * いた際、デフォルメ起動時にメッシュが実寸サイズ(例: 太陽半径400.7)のまま位置だけデフォルメ距離
-   * (太陽〜地球=100)になり、巨大な太陽メッシュにカメラが埋まる不具合があった
+   * setDeformMode()（手動切替時）と、コンストラクタ（ScaleModelConfig.deformDefault=
+   * trueで最初からデフォルメ起動する時）の両方から呼ぶ
    */
   private applyDeformVisuals() {
     for (const key of ALL_BODY_KEYS) {
@@ -897,8 +883,8 @@ export class ScaleModel3D {
   }
 
   private updateDeformButtonUI() {
-    this.deformToggleBtn.textContent = t(this.deformMode ? 'scale-deform-deform' : 'scale-deform-real')
-    this.deformToggleBtn.classList.toggle('active', this.deformMode)
+    this.deformRealBtn.classList.toggle('active', !this.deformMode)
+    this.deformDeformBtn.classList.toggle('active', this.deformMode)
   }
 
   /**
@@ -1341,6 +1327,16 @@ export class ScaleModel3D {
     rewrite('mercury', t('label-mercury'), '#b8afa8')
     rewrite('venus', t('label-venus'), '#e8d4a0')
     rewrite('mars', t('label-mars'), '#e08050')
+  }
+
+  /** 位置マーカーを地球上の指定の緯度・経度（度）に置く */
+  setLocation(latDeg: number, lonDeg: number) {
+    const dir = localDirForLatLon(THREE.MathUtils.degToRad(latDeg), THREE.MathUtils.degToRad(lonDeg))
+    // 先端(頂点)がピンポイントで地表に接し、底面が外側に広がる「逆さの円錐」にする。
+    // 向きを反転した分、先端が内側(EARTH_R)、底面が外側(EARTH_R+MARKER_HEIGHT)に来る
+    this.locationMarker.position.copy(dir).multiplyScalar(EARTH_R + MARKER_HEIGHT / 2)
+    // ConeGeometryは既定でローカル+Y方向が底面→先端。地表の法線(dir)の逆向きに先端を向ける
+    this.locationMarker.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.clone().negate())
   }
 
   handleResize() {

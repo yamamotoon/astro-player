@@ -72,11 +72,9 @@ export function createSimPlaybackController(
     return new Date(simAnchorDate.getTime() + playback.elapsedMilliseconds)
   }
 
-  function formatSimDate(date: Date, mode: SimMode): string {
+  function formatSimDate(date: Date): string {
     const pad = (n: number) => String(n).padStart(2, '0')
-    const dateStr = `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
-    if (mode === 'day') return `${dateStr} ${pad(date.getHours())}:${pad(date.getMinutes())}`
-    return dateStr
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`
   }
 
   function applySimDate() {
@@ -96,10 +94,10 @@ export function createSimPlaybackController(
       setIcon(playBtn, playback.isPlaying ? pauseIconSvg : playIconSvg)
     }
     seekbar.value = String(Math.round(playback.fraction * SEEKBAR_MAX))
-    const simDateStr = formatSimDate(currentSimDate(), simMode)
+    const simDateStr = formatSimDate(currentSimDate())
     dateLabel.textContent = simDateStr
     // 表示上「今」と区別が付かない時はNOWボタンを目立たせない（既にNOWの状態のため）
-    const isAtNow = simDateStr === formatSimDate(new Date(), simMode)
+    const isAtNow = simDateStr === formatSimDate(new Date())
     nowBtn.classList.toggle('now-btn-active', !isAtNow)
   }
 

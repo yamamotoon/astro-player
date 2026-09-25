@@ -80,7 +80,7 @@ header h1 {
    SVGファイル自体にはclassを持たせず、挿入先ボタンの子セレクタでサイズを指定する */
 .back-btn svg,
 .toggle-controls svg,
-.fullscreen-btn svg {
+.icon-btn svg {
   width: 20px;
   height: 20px;
 }
@@ -318,19 +318,7 @@ input[type="number"] {
   position: relative;
 }
 
-.view-title {
-  font-size: 0.78rem;
-  color: #7080a0;
-  padding: 5px 10px;
-  background: #0d0d2b;
-  border-bottom: 1px solid #2a2a4a;
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-/* 3D/2Dはトグルボタン自体がラベルを兼ねるため、操作ボタンだけをcanvas右上に重ねる */
+/* 操作ボタンをcanvas右上に重ねる */
 .view-actions {
   position: absolute;
   top: max(8px, env(safe-area-inset-top));
@@ -340,19 +328,13 @@ input[type="number"] {
   gap: 6px;
 }
 
-.view-actions .fullscreen-btn {
+.view-actions .icon-btn {
   width: 40px;
   height: 40px;
   font-size: 1rem;
 }
 
-.view-title-actions {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.fullscreen-btn {
+.icon-btn {
   background: none;
   border: 1px solid #2a2a4a;
   color: #5070a0;
@@ -369,7 +351,7 @@ input[type="number"] {
   flex-shrink: 0;
 }
 
-.fullscreen-btn:hover {
+.icon-btn:hover {
   background: #1a2a4a;
   color: #a0c0ff;
 }
@@ -437,42 +419,6 @@ input[type="number"] {
   fill: #7090c0;
 }
 
-/* フルスクリーン中のスタイル */
-main:fullscreen {
-  display: flex;
-  flex-direction: column;
-  background: #05051a;
-  height: 100vh;
-  overflow: hidden;
-}
-
-/* フルスクリーン時は設定パネルを非表示 */
-main:fullscreen .controls {
-  display: none;
-}
-
-/* フルスクリーン時はviews/sky-viewを拡張 */
-main:fullscreen .views,
-main:fullscreen .sky-view,
-main:fullscreen .scale-view {
-  flex: 1;
-  overflow: hidden;
-}
-
-/* フルスクリーン中はトグルを隠し、表示中のビューだけをフル表示 */
-main:fullscreen .view-toggle {
-  display: none;
-}
-
-main[data-fs="view2d"]:fullscreen .view-2d {
-  align-items: center;
-  justify-content: center;
-}
-main[data-fs="view2d"]:fullscreen #canvas2d {
-  width: min(80vh, 80vw) !important;
-  height: min(80vh, 80vw) !important;
-}
-
 .sky-view {
   flex: 1;
   display: flex;
@@ -522,25 +468,6 @@ main[data-fs="view2d"]:fullscreen #canvas2d {
   border-radius: 4px;
   pointer-events: none;
   white-space: pre;
-}
-
-/* 現在シミュレーションしている日時。画面上部中央に常時、大きめに表示する
-   （下部シークバー横の小さいラベルだけでは「今どの時点の天体か」が分かりにくいため） */
-.scale-date-hud {
-  position: absolute;
-  top: 8px;
-  left: 50%;
-  transform: translateX(-50%);
-  padding: 5px 14px;
-  background: rgba(0, 0, 20, 0.55);
-  color: #d8e8ff;
-  font-family: 'Consolas', 'SFMono-Regular', monospace;
-  font-size: 0.9rem;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  border-radius: 6px;
-  pointer-events: none;
-  white-space: nowrap;
 }
 
 /* カメラの向きインジケーター: 固定サイズ・固定位置。メインのズームには一切連動しない */
