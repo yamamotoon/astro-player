@@ -356,6 +356,121 @@ input[type="number"] {
   color: #a0c0ff;
 }
 
+.scale-view-btn {
+  background: none;
+  border: 1px solid #2a2a4a;
+  color: #5070a0;
+  height: 40px;
+  padding: 0 14px;
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.scale-view-btn:hover {
+  background: #1a2a4a;
+  color: #a0c0ff;
+}
+
+.scale-view-dialog {
+  /* 先頭のリセット(margin: 0)で標準の中央寄せが消えるため、改めて中央に置く */
+  margin: auto;
+  background: #0d0d2b;
+  color: #d0d0e8;
+  border: 1px solid #2a3a6a;
+  border-radius: 12px;
+  padding: 0;
+  width: min(320px, calc(100vw - 32px));
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6);
+}
+
+.scale-view-dialog::backdrop {
+  background: rgba(0, 0, 10, 0.6);
+}
+
+.scale-view-dialog-header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  padding: 14px 44px;
+  border-bottom: 1px solid #2a2a4a;
+  color: #a0c0ff;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.scale-view-dialog-close {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  border-radius: 6px;
+  color: #7080a0;
+  font-size: 1.3rem;
+  width: 36px;
+  height: 36px;
+  cursor: pointer;
+}
+
+.scale-view-dialog-close:hover {
+  background: #1a2a4a;
+  color: #a0c0ff;
+}
+
+.scale-view-dialog-list {
+  display: flex;
+  flex-direction: column;
+  padding: 10px 12px;
+  gap: 6px;
+}
+
+.scale-view-dialog-list + .scale-view-dialog-list {
+  border-top: 1px solid #2a2a4a;
+}
+
+.scale-view-dialog-list button {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: #11113a;
+  border: 1px solid #2a2a4a;
+  border-radius: 8px;
+  color: #d0d0e8;
+  font-size: 0.95rem;
+  padding: 12px 16px;
+  cursor: pointer;
+}
+
+.scale-view-dialog-list button:hover {
+  background: #1a2a4a;
+  border-color: #3a5a9e;
+}
+
+.scale-view-dialog-list button[hidden] {
+  display: none;
+}
+
+.body-dot,
+.body-ring {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.body-dot {
+  background: var(--dot);
+}
+
+.body-ring {
+  border: 2px solid var(--dot);
+}
+
 /* コンパスFAB: Googleマップのコンパスに倣い、他の操作ボタンから独立した
    単独の円形ボタンとして右下に配置。ONの間は針が実際のデバイス方位に回転する */
 .compass-fab {

@@ -5,8 +5,6 @@ import earthTextureUrl from './assets/earth-texture.png'
 import moonTextureUrl from './assets/moon-texture.png'
 import { createSimPlaybackController, type SimMode, type SimPlaybackController } from './simPlayback'
 import { setIcon } from './iconInjector'
-import targetIconSvg from './icons/target.svg?raw'
-import orbitIconSvg from './icons/orbit.svg?raw'
 import {
   dayOfYearFraction, orbitalAngleFromEpoch, subsolarLonRad, localDirForLon, localDirForLatLon,
   computeOrbitalPositions, type InnerPlanetKey, INNER_PLANET_KEYS,
@@ -30,9 +28,9 @@ type BodyKey = 'sun' | InnerPlanetKey | 'earth' | 'moon'
 // （表示対象を絞るactiveBodyKeys()とは目的が違うので取り違えないよう別名にしている）
 const ALL_BODY_KEYS: BodyKey[] = ['sun', 'mercury', 'venus', 'earth', 'mars', 'moon']
 
-// 「系全体」ボタンで使う、その天体の衛星の公転半径（issue #006）。今日の実際の衛星の位置ではなく
+// 視点ダイアログの「軌道を見る」で使う、その天体の衛星の公転半径。今日の実際の衛星の位置ではなく
 // 公転半径そのものを使うことで、衛星が軌道上のどこにいても画面外に出ない、日付に依存しない距離に
-// なる。月には衛星が無いためエントリが無い（UI側でボタン自体を隠す）。デフォルメモード（issue #007）
+// なる。衛星を持たない天体にはエントリが無い。デフォルメモード（issue #007）
 // では実際の距離ではなくデフォルメ後の距離を使う必要があるため、実寸/デフォルメの2セットを用意する
 const REAL_SATELLITE_ORBIT_RADIUS: Partial<Record<BodyKey, number>> = {
   sun: EARTH_SUN_DIST,
@@ -135,11 +133,9 @@ export class ScaleModel3D {
   private activePointerCount = 0
   private static readonly TAP_MOVE_THRESHOLD_PX = 6
 
-  // 注視点として選んでいる天体。常に天体1つだけを指す（issue #006）。カメラを動かすのは
-  // 「フォーカス」「系全体」ボタンだけで、タップ自体はこの対象を切り替えるだけでカメラは動かさない
+  // 注視点として選んでいる天体。常に天体1つだけを指す。タップでは対象を切り替えるだけでカメラは
+  // 動かさず、視点ダイアログ・全体表示・ショートカットキーでカメラを動かす
   private targetBody: BodyKey = 'sun'
-  private targetFocusBtn = document.getElementById('scale-target-focus-btn') as HTMLButtonElement
-  private targetSystemBtn = document.getElementById('scale-target-system-btn') as HTMLButtonElement
 
   // デフォルメモード（issue #007。実験的）: 太陽・地球・月を全て同じ半径(DEFORM_BODY_R)にし、
   // 距離もDEFORM_EARTH_MOON_DIST/DEFORM_SUN_EARTH_DISTに置き換える単純な2状態トグル。
@@ -147,6 +143,9 @@ export class ScaleModel3D {
   // backup/deform-distance-scale-wipブランチ参照）
   private deformMode = false
   private locationMarker: THREE.Mesh
+
+  private viewBtn = document.getElementById('scale-view-btn') as HTMLButtonElement
+  private viewDialog = document.getElementById('scale-view-dialog') as HTMLDialogElement
 
   private deformRealBtn = document.getElementById('scale-deform-real-btn') as HTMLButtonElement
   private deformDeformBtn = document.getElementById('scale-deform-deform-btn') as HTMLButtonElement
@@ -489,19 +488,28 @@ export class ScaleModel3D {
     canvas.addEventListener('pointercancel', this.onPointerCancel)
 
     // 「Home」キーで全天体がフレームに収まる位置へ（3Dツールの定番ショートカット）。
-    // Enter/Fキーは対象の天体へのフォーカス（フォーカスボタンと同じ効果のPC向け近道）
+    // PC向けの近道: Homeキーは全体表示、Enter/Fキーは対象の天体に寄る
     this.onKeyDown = (e: KeyboardEvent) => {
+      if (this.viewDialog.open) return
       if (e.key === 'Home') this.frameAll()
       if (e.key === 'Enter' || e.key === 'f' || e.key === 'F') this.focusOnTarget()
     }
     window.addEventListener('keydown', this.onKeyDown)
 
-    // 「フォーカス」「系全体」ボタン（issue #006）。対象の天体は変えず、カメラの距離だけを
-    // プリセットの距離にジャンプさせる。そこから先の手動ズーム・回転は制限しない
-    setIcon(this.targetFocusBtn, targetIconSvg)
-    setIcon(this.targetSystemBtn, orbitIconSvg)
-    this.on(this.targetFocusBtn, 'click', () => this.focusOnTarget())
-    this.on(this.targetSystemBtn, 'click', () => this.focusOnSystemView())
+    // 視点を選ぶダイアログ（issue #012）。項目を選ぶと対象を切り替えてカメラを動かし、閉じる
+    this.on(this.viewBtn, 'click', () => this.viewDialog.showModal())
+    this.on(document.getElementById('scale-view-dialog-close')!, 'click', () => this.viewDialog.close())
+    // ダイアログの外側（::backdrop）を押した時は、イベントの対象がdialog要素自体になる
+    this.on(this.viewDialog, 'click', (e) => {
+      if (e.target === this.viewDialog) this.viewDialog.close()
+    })
+    for (const item of this.viewDialog.querySelectorAll<HTMLButtonElement>('button[data-body]')) {
+      item.hidden = item.hasAttribute('data-inner-planet') && !this.showInnerPlanets
+      this.on(item, 'click', () => {
+        this.selectView(item.dataset.body as BodyKey, item.dataset.view as 'focus' | 'system')
+        this.viewDialog.close()
+      })
+    }
 
     // デフォルメモード切り替え（実験的機能）
     this.on(this.deformRealBtn, 'click', () => this.setDeformMode(false))
@@ -521,10 +529,9 @@ export class ScaleModel3D {
 
     this.handleResize()
 
-    // 起動時: targetBodyの初期値の「系全体」（対象の衛星が軌道上のどこにいても収まる距離）から
+    // 起動時: targetBodyの初期値の「軌道を見る」視点（対象の衛星が軌道上のどこにいても収まる距離）から
     // スタートする。handleResize()の後に呼ぶことで、正しいアスペクト比で距離を計算できる
     this.focusOnSystemView()
-    this.updateTargetButtonsUI()
 
     // ウィンドウだけでなく設定パネルの開閉でも描画領域の大きさが変わるため、親要素を直接監視する
     const resizeObserver = new ResizeObserver(() => this.handleResize())
@@ -762,16 +769,14 @@ export class ScaleModel3D {
   private static readonly LABEL_HIT_PADDING = 1.5
 
   /**
-   * 天体を押した(クリック/タップ)時の処理（issue #006）。押した天体を対象(targetBody)に
-   * 置き換えるだけで、カメラは一切動かさない（カメラを動かすのは「フォーカス」「系全体」
-   * ボタンだけ）。既に対象になっている天体を押した場合、何もない場所を押した場合は無視する
+   * 天体を押した(クリック/タップ)時の処理。押した天体を対象(targetBody)に置き換えるだけで、
+   * カメラは動かさない。既に対象になっている天体を押した場合、何もない場所を押した場合は無視する
    */
   private handleTap(clientX: number, clientY: number) {
     const hit = this.hitTestBody(clientX, clientY)
     if (!hit || hit === this.targetBody) return
     this.targetBody = hit
     this.lastTrackedPos = null // 対象が変わった瞬間なので追従の基準点をリセットする
-    this.updateTargetButtonsUI()
   }
 
   /**
@@ -815,6 +820,14 @@ export class ScaleModel3D {
       if (Math.abs(clientX - sx) <= halfWPx && Math.abs(clientY - sy) <= halfHPx) return key
     }
     return null
+  }
+
+  /** 対象の天体を切り替えて、その天体に寄る(focus)か、衛星の軌道が収まるまで引く(system) */
+  private selectView(body: BodyKey, view: 'focus' | 'system') {
+    this.targetBody = body
+    this.lastTrackedPos = null
+    if (view === 'focus') this.focusOnTarget()
+    else this.focusOnSystemView()
   }
 
   /** 対象の天体自体をじっくり見る距離までカメラを移動する（issue #006「フォーカス」ボタン） */
@@ -863,7 +876,7 @@ export class ScaleModel3D {
     this.updateDeformButtonUI()
 
     // 実寸⇔デフォルメで距離のスケールが大きく変わる（例: 地球〜月間は実寸221.3→デフォルメ50）ため、
-    // カメラを動かさないままだと収まり方がおかしくなる。「系全体」ボタンと同じ計算
+    // カメラを動かさないままだと収まり方がおかしくなる。「軌道を見る」と同じ計算
     // (focusOnSystemView())で対象の系がちょうど収まる距離に再フィットする
     this.focusOnSystemView()
   }
@@ -889,11 +902,9 @@ export class ScaleModel3D {
 
   /**
    * 対象の天体の衛星の公転軌道（XZ平面上の半径orbitRadiusの円）が、今のカメラ視線方向で
-   * ちょうど収まる距離までカメラを移動する（issue #006「系全体」ボタン）。
-   * 「どの角度から見ても収まる」保証はあえて持たせない: カメラは回転しない前提でフィットし、
-   * 後で手動回転して衛星が画面外に出た場合は、ユーザーが同じボタンをもう一度押してその向きで
-   * 合わせ直す運用（frameAll()と同じ「今の視線方向基準」の考え方）。
-   * 衛星を持たない天体(月)はUI側でボタン自体を隠す
+   * ちょうど収まる距離までカメラを移動する（視点ダイアログの「軌道を見る」）。
+   * 「どの角度から見ても収まる」保証は持たせず、今のカメラ視線方向を基準にフィットする
+   * （frameAll()と同じ考え方）。衛星を持たない天体では何もしない
    */
   private focusOnSystemView() {
     const orbitRadii = this.deformMode ? DEFORM_SATELLITE_ORBIT_RADIUS : REAL_SATELLITE_ORBIT_RADIUS
@@ -901,12 +912,6 @@ export class ScaleModel3D {
     if (orbitRadius === undefined) return
     const distance = Math.max(this.frameDistanceForOrbit(orbitRadius, 1.15), this.controls.minDistance)
     this.moveCameraTo(this.posByKey[this.targetBody], distance)
-  }
-
-  /** 「系全体」ボタンの表示/非表示を対象の天体に応じて切り替える（衛星を持たない月では隠す）。
-   *  どのキーが定義されているかは実寸/デフォルメで変わらないため、どちらを見ても同じ結果になる */
-  private updateTargetButtonsUI() {
-    this.targetSystemBtn.hidden = REAL_SATELLITE_ORBIT_RADIUS[this.targetBody] === undefined
   }
 
   /**
@@ -1375,6 +1380,7 @@ export class ScaleModel3D {
    * texture/renderer)の両方を解放する
    */
   dispose() {
+    if (this.viewDialog.open) this.viewDialog.close()
     if (this.rafId !== null) cancelAnimationFrame(this.rafId)
     window.removeEventListener('keydown', this.onKeyDown)
     const canvas = this.renderer.domElement

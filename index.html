@@ -141,14 +141,32 @@
     <section id="scene-scale" class="scale-view" style="display: none">
       <div class="scale-canvas-wrap">
         <div class="view-actions">
-          <button id="scale-target-focus-btn" class="icon-btn" title="対象にフォーカス (Enter/F)" data-i18n-title="scale-target-focus-title"></button>
-          <button id="scale-target-system-btn" class="icon-btn" title="対象の系全体を表示" data-i18n-title="scale-target-system-title"></button>
+          <button id="scale-view-btn" class="scale-view-btn" data-i18n="scale-view-btn">視点</button>
           <button id="scale-fit-btn" class="icon-btn" title="全体を表示 (Home)" data-i18n-title="scale-fit-title"></button>
         </div>
         <canvas id="canvas-scale"></canvas>
         <pre id="scale-debug-hud" class="scale-debug-hud"></pre>
         <canvas id="scale-angle-gizmo" class="scale-angle-gizmo" width="96" height="96"></canvas>
       </div>
+      <!-- 視点を選ぶダイアログ -->
+      <dialog id="scale-view-dialog" class="scale-view-dialog">
+        <div class="scale-view-dialog-header">
+          <span data-i18n="scale-view-title">視点を選ぶ</span>
+          <button id="scale-view-dialog-close" class="scale-view-dialog-close" aria-label="閉じる" data-i18n-aria-label="dialog-close">×</button>
+        </div>
+        <div class="scale-view-dialog-list">
+          <button data-body="earth" data-view="system"><span class="body-ring" style="--dot: #5b9bff"></span><span data-i18n="scale-view-moon-orbit">地球と月の軌道を見る</span></button>
+          <button data-body="sun" data-view="system"><span class="body-ring" style="--dot: #ffee44"></span><span data-i18n="scale-view-earth-orbit">地球の公転軌道を見る</span></button>
+        </div>
+        <div class="scale-view-dialog-list">
+          <button data-body="sun" data-view="focus"><span class="body-dot" style="--dot: #ffee44"></span><span data-i18n="scale-view-focus-sun">太陽に寄る</span></button>
+          <button data-body="earth" data-view="focus"><span class="body-dot" style="--dot: #5b9bff"></span><span data-i18n="scale-view-focus-earth">地球に寄る</span></button>
+          <button data-body="moon" data-view="focus"><span class="body-dot" style="--dot: #ccd4ee"></span><span data-i18n="scale-view-focus-moon">月に寄る</span></button>
+          <button data-body="mercury" data-view="focus" data-inner-planet><span class="body-dot" style="--dot: #b8afa8"></span><span data-i18n="scale-view-focus-mercury">水星に寄る</span></button>
+          <button data-body="venus" data-view="focus" data-inner-planet><span class="body-dot" style="--dot: #e8d4a0"></span><span data-i18n="scale-view-focus-venus">金星に寄る</span></button>
+          <button data-body="mars" data-view="focus" data-inner-planet><span class="body-dot" style="--dot: #e08050"></span><span data-i18n="scale-view-focus-mars">火星に寄る</span></button>
+        </div>
+      </dialog>
     </section>
 
     <!-- スケールモデル専用の時間バー: 3D+2D/SKYの24hシークバーとは独立（issue #004） -->

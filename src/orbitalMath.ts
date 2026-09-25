@@ -78,7 +78,7 @@ export const EARTH_SUN_DIST = EARTH_SUN_DIST_KM / MOON_RADIUS_KM
 
 // ---- 内惑星（水星・金星・火星）。地球の公転ビューアのみでON/OFFする(ScaleModelConfig.
 // showInnerPlanets)実験的な追加。衛星を持たない前提（火星の衛星フォボス/ダイモスは省略）で、
-// 「系全体」ボタン(scaleModel3d.tsのREAL_SATELLITE_ORBIT_RADIUS等)にもエントリを作らない ----
+// 衛星の公転半径(scaleModel3d.tsのREAL_SATELLITE_ORBIT_RADIUS等)にもエントリを作らない ----
 export type InnerPlanetKey = 'mercury' | 'venus' | 'mars'
 // 太陽に近い順（配置・ループの基準順）
 export const INNER_PLANET_KEYS: readonly InnerPlanetKey[] = ['mercury', 'venus', 'mars']

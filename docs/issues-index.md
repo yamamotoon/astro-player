@@ -14,6 +14,7 @@
 | [007](issue-007-scale-model-deform-mode.md) | スケールモデルのデフォルメ表示モード | 実装・確認済み。地球の公転/自転ビューアではデフォルトに |
 | [010](issue-010-scale-title-bar-revamp.md) | スケール系画面のタイトルバー見直し | 実装済み。動作確認待ち |
 | [011](issue-011-scale-location-marker.md) | スケールモデルの位置マーカーを設定パネルの場所に連動させる | 実装済み。動作確認待ち |
+| [012](issue-012-scale-view-dialog.md) | スケール系画面の視点をダイアログで選べるようにする | 実装済み。ボタン廃止の動作確認待ち |
 
 `scale-model-3d-handover.md`は個別issueではなく、スケールモデル機能全体の生きた状態サマリなので
 番号を振らない。
