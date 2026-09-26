@@ -817,15 +817,18 @@ export class ScaleModel3D {
     const canvasHeightPx = Math.max(this.renderer.domElement.clientHeight, 1)
     const halfHPx = (ScaleModel3D.LABEL_HEIGHT_FRACTION / 2) * canvasHeightPx * ScaleModel3D.LABEL_HIT_PADDING
     const halfWPx = halfHPx * 4 // ラベル用canvasは256x64(4:1)
+    // デフォルメモードではラベル同士が重なり得るため、当たったうち最も手前(ndc.zが最小)のものを返す
+    let nearest: { key: BodyKey; z: number } | null = null
     for (const key of this.activeBodyKeys()) {
       const sprite = this.labelByKey[key]
       const ndc = sprite.position.clone().project(this.camera)
       if (ndc.z < -1 || ndc.z > 1) continue // カメラの後ろ側は対象外
       const sx = rect.left + (ndc.x * 0.5 + 0.5) * rect.width
       const sy = rect.top + (-ndc.y * 0.5 + 0.5) * rect.height
-      if (Math.abs(clientX - sx) <= halfWPx && Math.abs(clientY - sy) <= halfHPx) return key
+      if (Math.abs(clientX - sx) > halfWPx || Math.abs(clientY - sy) > halfHPx) continue
+      if (!nearest || ndc.z < nearest.z) nearest = { key, z: ndc.z }
     }
-    return null
+    return nearest?.key ?? null
   }
 
   /** 対象の天体を切り替えて、その天体に寄る(focus)か、衛星の軌道が収まるまで引く(system) */
@@ -1031,7 +1034,7 @@ export class ScaleModel3D {
     const sprite = new THREE.Sprite(new THREE.SpriteMaterial({
       map: normalMap,
       transparent: true,
-      depthTest: false, // 球の裏側に回っても隠れず、常に手前に見えるようにする
+      depthTest: false, // 表示モードに応じてupdateLabels()が毎フレーム切り替える
       depthWrite: false,
     }))
     sprite.renderOrder = 999
@@ -1045,7 +1048,7 @@ export class ScaleModel3D {
     ])
     const mat = new THREE.LineBasicMaterial({
       color, transparent: true, opacity: 0.25,
-      depthTest: false, depthWrite: false, // ラベルと同様、常に手前に見えるようにする
+      depthTest: false, depthWrite: false, // depthTestはラベルと同様にupdateLabels()が切り替える
     })
     const line = new THREE.Line(geo, mat)
     line.renderOrder = 998
@@ -1066,7 +1069,11 @@ export class ScaleModel3D {
   private static readonly MODEL_TO_LINE_PX = 10
   private static readonly LINE_LENGTH_PX = 20
   private static readonly LINE_TO_LABEL_PX = 10
-  // 衝突をほぐす反復回数（天体3つ・判定ペアは少数なので数回で十分収束する）
+  // デフォルメモード中の同じ3区間（押し出しなしで天体の真下に固定配置するため、詰めた値にする）
+  private static readonly DEFORM_MODEL_TO_LINE_PX = 4
+  private static readonly DEFORM_LINE_LENGTH_PX = 10
+  private static readonly DEFORM_LINE_TO_LABEL_PX = 4
+  // 実寸モードで衝突をほぐす反復回数（判定ペアは少数なので数回で十分収束する）
   private static readonly LABEL_COLLISION_ITERATIONS = 6
   // デバッグ用: 実際に当たり判定に使っている「ラベルのサイズ」の枠線表示のON/OFF
   private static readonly DEBUG_SHOW_LABEL_SIZE = false
@@ -1074,11 +1081,14 @@ export class ScaleModel3D {
   private static readonly DEBUG_SHOW_CAMERA_HUD = false
 
   /**
-   * ラベルは基本的に天体の実座標にそのまま置く（オフセットなし＝天体本体と重なった状態から
+   * 実寸モード: ラベルは天体の実座標にそのまま置く（オフセットなし＝天体本体と重なった状態から
    * 出発する）。そこから、①ラベル同士、②ラベルと天体本体（球）、それぞれ画面上で重なって
-   * いる組があれば押し離す。判定は「視線からの角度(tan)」空間で行うことで、距離による
-   * 遠近（近いほど大きく見える）を正しく考慮する。グローバルな基準点は使わず、衝突している
-   * 相手との関係だけを見るローカルな判定にしている。
+   * いる組があれば押し離す。グローバルな基準点は使わず、衝突している相手との関係だけを見る
+   * ローカルな判定にしている。
+   * デフォルメモード: 押し離しはせず、各ラベルを自分の天体の輪郭の真下に固定する。他の天体・
+   * ラベルとの重なりは、奥行きによる前後関係（depthTest）で見せる。
+   * いずれも計算は「視線からの角度(tan)」空間で行うことで、距離による遠近（近いほど大きく
+   * 見える）を正しく考慮する。
    */
   private updateLabels() {
     const fovVRad = THREE.MathUtils.degToRad(this.camera.fov)
@@ -1103,9 +1113,12 @@ export class ScaleModel3D {
     // 最低1にクランプする
     const canvasHeightPx = Math.max(this.renderer.domElement.clientHeight, 1)
     const pxToTan = (px: number) => px * 2 * Math.tan(fovVRad / 2) / canvasHeightPx
-    const modelToLineTan = pxToTan(ScaleModel3D.MODEL_TO_LINE_PX)
-    const lineLengthTan = pxToTan(ScaleModel3D.LINE_LENGTH_PX)
-    const lineToLabelTan = pxToTan(ScaleModel3D.LINE_TO_LABEL_PX)
+    const modelToLineTan = pxToTan(
+      this.deformMode ? ScaleModel3D.DEFORM_MODEL_TO_LINE_PX : ScaleModel3D.MODEL_TO_LINE_PX)
+    const lineLengthTan = pxToTan(
+      this.deformMode ? ScaleModel3D.DEFORM_LINE_LENGTH_PX : ScaleModel3D.LINE_LENGTH_PX)
+    const lineToLabelTan = pxToTan(
+      this.deformMode ? ScaleModel3D.DEFORM_LINE_TO_LABEL_PX : ScaleModel3D.LINE_TO_LABEL_PX)
     const totalGapTan = modelToLineTan + lineLengthTan + lineToLabelTan
 
     // 天体の見た目の半径(r = 実半径/深度)から、遠近法で見た実際の輪郭（シルエット）が
@@ -1173,6 +1186,11 @@ export class ScaleModel3D {
       const mat = sprite.material as THREE.SpriteMaterial
       const wantMap = key === this.targetBody ? this.labelMaps[key].selected : this.labelMaps[key].normal
       if (mat.map !== wantMap) { mat.map = wantMap; mat.needsUpdate = true }
+      // デフォルメモード中はラベル・引き出し線とも奥行きで前後を決める（手前の天体に隠れる。
+      // ラベル同士は透明物体の奥→手前の描画順で重なる）。実寸モードでは常に手前に表示する
+      mat.depthTest = this.deformMode
+      const leaderMat = leader.material as THREE.LineBasicMaterial
+      leaderMat.depthTest = this.deformMode
       return { key, sprite, leader, bodyPos, depth: p.depth, baseX: p.x, baseY: p.y, x: p.x, y: p.y }
     }
     const labels = activeKeys.map(key =>
@@ -1194,29 +1212,37 @@ export class ScaleModel3D {
       return dist < 1e-6 ? { nx: 0, ny: -1, overlap } : { nx: dx / dist, ny: dy / dist, overlap }
     }
 
-    for (let iter = 0; iter < ScaleModel3D.LABEL_COLLISION_ITERATIONS; iter++) {
-      // ① ラベル同士（実測テキストサイズを使う。箱基準のlabelRadiusのままだと、天体同士が
-      // 画面上で接近する場面でここが支配的になり、②の精密な距離コントロールを台無しにする）。
-      // labels配列は[太陽,地球,月]の優先順位の並びそのもの: iの方がjより常に優先度が高いので、
-      // 優先度の高いa(親)は動かさず、低いb(子)だけを重なり量ぶん全量押し出す
-      for (let i = 0; i < labels.length; i++) {
-        for (let j = i + 1; j < labels.length; j++) {
-          const a = labels[i], b = labels[j]
-          const hit = overlapOf(a.x, a.y, textRadii[i], b.x, b.y, textRadii[j])
-          if (!hit) continue
-          b.x += hit.nx * hit.overlap; b.y += hit.ny * hit.overlap
+    if (this.deformMode) {
+      // デフォルメモード: 衝突回避はせず、各ラベルを自分の天体の輪郭の真下に固定する
+      // （他の天体・ラベルとの重なりは奥行きによる前後関係に任せる）
+      labels.forEach((label, i) => {
+        label.y = label.baseY - (sphereEdgeTan(spheres[i].r) + totalGapTan + textHalfHs[i])
+      })
+    } else {
+      for (let iter = 0; iter < ScaleModel3D.LABEL_COLLISION_ITERATIONS; iter++) {
+        // ① ラベル同士（実測テキストサイズを使う。箱基準のlabelRadiusのままだと、天体同士が
+        // 画面上で接近する場面でここが支配的になり、②の精密な距離コントロールを台無しにする）。
+        // labels配列は[太陽,地球,月]の優先順位の並びそのもの: iの方がjより常に優先度が高いので、
+        // 優先度の高いa(親)は動かさず、低いb(子)だけを重なり量ぶん全量押し出す
+        for (let i = 0; i < labels.length; i++) {
+          for (let j = i + 1; j < labels.length; j++) {
+            const a = labels[i], b = labels[j]
+            const hit = overlapOf(a.x, a.y, textRadii[i], b.x, b.y, textRadii[j])
+            if (!hit) continue
+            b.x += hit.nx * hit.overlap; b.y += hit.ny * hit.overlap
+          }
         }
-      }
-      // ② ラベル と 天体本体（自分の球も含め、全ての球から押し出す）。overlapSphereLabelが
-      // 遠近法補正後の輪郭・方向ごとの正しい「実際の文字」の辺・3区間合計(totalGapTan)の
-      // 隙間をすべて考慮して必要な距離を計算する
-      for (let li = 0; li < labels.length; li++) {
-        const label = labels[li]
-        for (const sphere of spheres) {
-          const hit = overlapSphereLabel(sphere, label.x, label.y, textHalfWs[li], textHalfHs[li], totalGapTan)
-          if (!hit) continue
-          label.x += hit.nx * hit.overlap
-          label.y += hit.ny * hit.overlap
+        // ② ラベル と 天体本体（自分の球も含め、全ての球から押し出す）。overlapSphereLabelが
+        // 遠近法補正後の輪郭・方向ごとの正しい「実際の文字」の辺・3区間合計(totalGapTan)の
+        // 隙間をすべて考慮して必要な距離を計算する
+        for (let li = 0; li < labels.length; li++) {
+          const label = labels[li]
+          for (const sphere of spheres) {
+            const hit = overlapSphereLabel(sphere, label.x, label.y, textHalfWs[li], textHalfHs[li], totalGapTan)
+            if (!hit) continue
+            label.x += hit.nx * hit.overlap
+            label.y += hit.ny * hit.overlap
+          }
         }
       }
     }
