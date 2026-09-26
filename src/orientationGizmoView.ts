@@ -4,15 +4,16 @@ import * as THREE from 'three'
 // 操作（向きの決め方）は持たない（orientationControl.ts）
 
 export class OrientationGizmoView {
-  private renderer: THREE.WebGLRenderer
   private scene = new THREE.Scene()
   private camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 100)
 
-  constructor(canvas: HTMLCanvasElement, private model: THREE.Object3D) {
-    this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true })
-    this.renderer.setPixelRatio(window.devicePixelRatio)
-    // CSSサイズはレイアウト前だと0になり得るため、canvasのHTML属性の固定サイズを使う
-    this.renderer.setSize(canvas.width, canvas.height, false)
+  /**
+   * renderer: 呼び出し側がcanvasごとに1つだけ作って使い回すもの（背景を透過させるためalpha:trueで作る）。
+   * 借りて使うだけで、dispose()でも破棄しない。
+   * sizePx: 表示サイズ（CSSピクセル、正方形）。表示サイズと描画サイズ(×画素密度)はsetSize()がまとめて設定する
+   */
+  constructor(private renderer: THREE.WebGLRenderer, private model: THREE.Object3D, sizePx = 96) {
+    this.renderer.setSize(sizePx, sizePx)
 
     this.scene.add(new THREE.AmbientLight(0xffffff, 1.0))
     const light = new THREE.DirectionalLight(0xffffff, 2.0)
@@ -60,6 +61,5 @@ export class OrientationGizmoView {
         for (const m of materials) m.dispose()
       }
     })
-    this.renderer.dispose()
   }
 }

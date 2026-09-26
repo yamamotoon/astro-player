@@ -1,4 +1,5 @@
 import './style.css'
+import * as THREE from 'three'
 import { applyLang, getLang, t } from './i18n'
 import { Scene3D } from './scene3d'
 import { Compass2D } from './compass2d'
@@ -41,11 +42,21 @@ zoomSlider.addEventListener('input', () => {
   arView.setFov(parseFloat(zoomSlider.value))
 })
 
+// WebGLRendererはcanvasごとに1つだけ作り、アプリの間ずっと使い回す。canvasのWebGLの状態は
+// rendererを破棄しても残るため、同じcanvasにrendererを作り直すと前の状態を引き継いでしまう
+function createRenderer(canvasId: string, params: { alpha?: boolean } = {}): THREE.WebGLRenderer {
+  const canvas = document.getElementById(canvasId) as HTMLCanvasElement
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, ...params })
+  renderer.setPixelRatio(window.devicePixelRatio)
+  return renderer
+}
+
 // ---- スケール系モード（地球の公転ビューア / 地球の自転ビューア） ----
 // 2つとも同じcanvas・同じDOM（#scene-scale, #scale-playback）を使い回す独立モード。
 // 常に生きたインスタンスが1つだけになるようにする（=IDの衝突や多重描画が構造的に起きない）ため、
-// モードに入る/離れるたびに必ずdispose()してから作り直す（issue #008）
-const canvasScale = document.getElementById('canvas-scale') as HTMLCanvasElement
+// モードに入る/離れるたびに必ずdispose()してから作り直す（rendererは作り直さず使い回す）
+const scaleRenderer = createRenderer('canvas-scale')
+const scaleGizmoRenderer = createRenderer('scale-angle-gizmo', { alpha: true })
 let scaleModel: ScaleModel3D | null = null
 
 const SCALE_CONFIG_ORBIT: ScaleModelConfig = {
@@ -63,7 +74,7 @@ const SCALE_CONFIG_SPIN: ScaleModelConfig = {
 
 function enterScaleMode(config: ScaleModelConfig, navTitleKey: string) {
   scaleModel?.dispose()
-  scaleModel = new ScaleModel3D(canvasScale, config)
+  scaleModel = new ScaleModel3D(scaleRenderer, scaleGizmoRenderer, config)
   const { lat, lng } = getLatLng()
   scaleModel.setLocation(lat, lng)
   showScene('scale', navTitleKey)
@@ -74,13 +85,14 @@ setIcon(scaleFitBtn, frameAllIconSvg)
 scaleFitBtn.addEventListener('click', () => scaleModel?.frameAll())
 
 // ---- 大きさ比較モード（メニューの「スケール」。issue #013） ----
-// スケール系モードと同じく、入るたびに作り直し、出る時に破棄する
-const canvasSize = document.getElementById('canvas-size') as HTMLCanvasElement
+// スケール系モードと同じく、入るたびに作り直し、出る時に破棄する（rendererは使い回す）
+const sizeRenderer = createRenderer('canvas-size')
+const sizeGizmoRenderer = createRenderer('size-orient-gizmo-canvas', { alpha: true })
 let sizeView: SizeComparison3D | null = null
 
 function enterSizeMode() {
   sizeView?.dispose()
-  sizeView = new SizeComparison3D(canvasSize)
+  sizeView = new SizeComparison3D(sizeRenderer, sizeGizmoRenderer)
   showScene('size', 'nav-scale')
 }
 

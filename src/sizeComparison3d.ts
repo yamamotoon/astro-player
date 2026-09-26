@@ -73,7 +73,6 @@ type Orientation = 'horizontal' | 'vertical'
 interface Box { minX: number; maxX: number; minY: number; maxY: number }
 
 export class SizeComparison3D {
-  private renderer: THREE.WebGLRenderer
   private scene = new THREE.Scene()
   private camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 10000)
   private controls: OrbitControls
@@ -94,9 +93,12 @@ export class SizeComparison3D {
   private viewDialog = document.getElementById('size-view-dialog') as HTMLDialogElement
   private viewList = document.getElementById('size-view-list') as HTMLElement
 
-  constructor(private canvas: HTMLCanvasElement) {
-    this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true })
-    this.renderer.setPixelRatio(window.devicePixelRatio)
+  /**
+   * renderer・gizmoRendererは呼び出し側（main.ts）がcanvasごとに1つだけ作って使い回すものを受け取る。
+   * このインスタンスは借りて使うだけで、dispose()でも破棄しない
+   */
+  constructor(private renderer: THREE.WebGLRenderer, gizmoRenderer: THREE.WebGLRenderer) {
+    const canvas = renderer.domElement
     this.renderer.setClearColor(0x05051a)
 
     // 正投影カメラ。frustumを画面のピクセル数で取り、camera.zoom = 1単位あたりのピクセル数として扱う
@@ -114,9 +116,10 @@ export class SizeComparison3D {
     this.scene.add(new THREE.AmbientLight(0xffffff, AMBIENT_LIGHT_INTENSITY))
     this.createBodies()
 
-    const gizmoCanvas = document.getElementById('size-orient-gizmo') as HTMLCanvasElement
-    this.gizmoView = new OrientationGizmoView(gizmoCanvas, createGlobeGizmoModel())
-    this.orientControl = new OrientationControl(gizmoCanvas, (q) => {
+    this.gizmoView = new OrientationGizmoView(gizmoRenderer, createGlobeGizmoModel())
+    // ドラッグは枠全体（見た目の操作できる範囲）で受ける
+    const gizmoFrame = document.getElementById('size-orient-gizmo') as HTMLElement
+    this.orientControl = new OrientationControl(gizmoFrame, (q) => {
       this.gizmoView.setOrientation(q)
       this.applyOrientation(q)
     }, { initialTiltDeg: INITIAL_TILT_DEG })
@@ -403,7 +406,7 @@ export class SizeComparison3D {
   }
 
   private handleResize() {
-    const parent = this.canvas.parentElement!
+    const parent = this.renderer.domElement.parentElement!
     const w = parent.clientWidth
     const h = parent.clientHeight
     if (w === 0 || h === 0) return
@@ -449,6 +452,5 @@ export class SizeComparison3D {
         material.dispose()
       }
     })
-    this.renderer.dispose()
   }
 }

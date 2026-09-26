@@ -61,7 +61,6 @@ export interface ScaleModelConfig {
 }
 
 export class ScaleModel3D {
-  private renderer: THREE.WebGLRenderer
   private scene: THREE.Scene
   private camera: THREE.PerspectiveCamera
   private controls: OrbitControls
@@ -106,10 +105,9 @@ export class ScaleModel3D {
 
   // カメラの向きインジケーター: メインの3Dワールドとは独立した固定サイズのミニビューポートに
   // 座標軸モデルを描画し、メインカメラの「向き」だけを毎フレーム同期する（位置・ズームは無視）
+  private static readonly GIZMO_SIZE_PX = 96 // 表示サイズ（CSSピクセル、正方形）
   private gizmoScene: THREE.Scene
   private gizmoCamera: THREE.PerspectiveCamera
-  private gizmoRenderer: THREE.WebGLRenderer | null = null
-  private gizmoCanvas = document.getElementById('scale-angle-gizmo') as HTMLCanvasElement | null
 
   private readonly onKeyDown: (e: KeyboardEvent) => void
   private readonly onPointerDown: (e: PointerEvent) => void
@@ -189,7 +187,16 @@ export class ScaleModel3D {
   private earthTiltQuaternion = new THREE.Quaternion()
   private earthAxisLine!: THREE.Line
 
-  constructor(canvas: HTMLCanvasElement, config: ScaleModelConfig) {
+  /**
+   * renderer・gizmoRendererは呼び出し側（main.ts）がcanvasごとに1つだけ作って使い回すものを受け取る。
+   * このインスタンスは借りて使うだけで、dispose()でも破棄しない
+   */
+  constructor(
+    private renderer: THREE.WebGLRenderer,
+    private gizmoRenderer: THREE.WebGLRenderer,
+    config: ScaleModelConfig,
+  ) {
+    const canvas = renderer.domElement
     // configをフィールドへ反映するのは、下のcomputeOrbitalPositions()（deformModeを見る）より前
     this.deformMode = config.deformDefault
     this.targetBody = config.defaultTarget
@@ -199,8 +206,6 @@ export class ScaleModel3D {
     // (currentSimDateValue、フィールド初期化子で既に設定済み)に基づく公転位置を計算しておく
     computeOrbitalPositions(this.currentSimDate(), this.deformMode)
 
-    this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true })
-    this.renderer.setPixelRatio(window.devicePixelRatio)
     this.renderer.setClearColor(0x05051a)
 
     this.scene = new THREE.Scene()
@@ -217,16 +222,10 @@ export class ScaleModel3D {
     this.gizmoScene = new THREE.Scene()
     this.gizmoScene.add(new THREE.AxesHelper(1))
     this.gizmoCamera = new THREE.PerspectiveCamera(40, 1, 0.1, 10)
-    if (this.gizmoCanvas) {
-      // 固定サイズのビューポートなので、レイアウト依存のclientWidth/Height（非表示中は0になり得る）
-      // ではなく、HTML側で宣言済みのwidth/height属性をそのまま使う
-      const size = this.gizmoCanvas.width || 96
-      this.gizmoRenderer = new THREE.WebGLRenderer({ canvas: this.gizmoCanvas, antialias: true, alpha: true })
-      this.gizmoRenderer.setPixelRatio(window.devicePixelRatio)
-      this.gizmoRenderer.setSize(size, size, false)
-      this.gizmoCamera.aspect = 1
-      this.gizmoCamera.updateProjectionMatrix()
-    }
+    // 固定サイズ。表示サイズと描画サイズ(×画素密度)はsetSize()がまとめて設定する
+    this.gizmoRenderer.setSize(ScaleModel3D.GIZMO_SIZE_PX, ScaleModel3D.GIZMO_SIZE_PX)
+    this.gizmoCamera.aspect = 1
+    this.gizmoCamera.updateProjectionMatrix()
 
     this.controls = new OrbitControls(this.camera, canvas)
     this.controls.target.copy(EARTH_POS)
@@ -1334,7 +1333,6 @@ export class ScaleModel3D {
    * 大きさ・見え方はカメラの向きが変わらない限り変化しない。
    */
   private renderGizmo() {
-    if (!this.gizmoRenderer) return
     const backward = new THREE.Vector3(0, 0, 1).applyQuaternion(this.camera.quaternion)
     this.gizmoCamera.position.copy(backward).multiplyScalar(3)
     this.gizmoCamera.up.copy(this.camera.up)
@@ -1409,7 +1407,7 @@ export class ScaleModel3D {
    * 時／画面を離れる時に必ずdispose()してから次のインスタンスを作る」運用にすることで、
    * 常に生きたインスタンスが1つだけになるようにする（ID衝突・多重描画を構造的に起こさないため）。
    * イベントリスナー(cleanupFns・キー/ポインタ系)とThree.jsのGPUリソース(geometry/material/
-   * texture/renderer)の両方を解放する
+   * texture)の両方を解放する。rendererは借り物なので解放しない（次のインスタンスが使い回す）
    */
   dispose() {
     if (this.viewDialog.open) this.viewDialog.close()
@@ -1426,8 +1424,6 @@ export class ScaleModel3D {
     ScaleModel3D.disposeObject3D(this.scene)
     ScaleModel3D.disposeObject3D(this.gizmoScene)
     this.controls.dispose()
-    this.renderer.dispose()
-    this.gizmoRenderer?.dispose()
   }
 
   /** シーングラフを辿り、Mesh/Line/LineLoop/SpriteのgeometryとmaterialとテクスチャをGPUから解放する */
