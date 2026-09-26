@@ -1,4 +1,7 @@
-import './style.css'
+import './app.css' // 全画面の土台。各画面のCSSより先に読み込む
+import './menu.css'
+import './hud.css'
+import './dashboard.css'
 import * as THREE from 'three'
 import { applyLang, getLang, t } from './i18n'
 import { Scene3D } from './scene3d'

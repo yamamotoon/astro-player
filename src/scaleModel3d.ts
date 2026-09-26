@@ -1,6 +1,8 @@
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { t } from './i18n'
+import './scaleScene.css'
+import './scaleModel3d.css'
 import earthTextureUrl from './assets/earth-texture.png'
 import moonTextureUrl from './assets/moon-texture.png'
 import mercuryTextureUrl from './assets/mercury-texture.png'

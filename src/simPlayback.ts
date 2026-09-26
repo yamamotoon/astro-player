@@ -1,5 +1,6 @@
 import { PlaybackController } from './playbackController'
 import { setIcon } from './iconInjector'
+import './simPlayback.css'
 import playIconSvg from './icons/play.svg?raw'
 import pauseIconSvg from './icons/pause.svg?raw'
 import chevronLeft1Svg from './icons/chevron-left.svg?raw'

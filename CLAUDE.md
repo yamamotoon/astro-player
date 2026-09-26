@@ -60,6 +60,10 @@ main.ts
 - 3D+2D/SKYモードの座標変換は `astroCalc.ts` の `positionToXYZ` / `toNorthDeg` に集約する
   （スケールモデルは別の座標系。「既知の座標変換」節参照）
 - 星座データは `astroCalc.ts` の定数に追加する
+- CSSは、その画面を持つTSと同じ場所に置き、そのTSからimportする（例: `sizeComparison3d.ts` → `sizeComparison3d.css`）。
+  `app.css`（main.tsが最初にimport）には全画面の土台と共通部品（ボタンの`.btn`/`.btn-float`）だけを置く。
+  複数の画面で共有する部分は、共有している画面から個別のファイルとしてimportする（例: `scaleScene.css`・`simPlayback.css`）
+- ボタンには必ず`.btn`を付け、画面（canvas）の上に重ねるボタンには`.btn-float`も付ける。個別のクラスには違いだけを書く
 
 ## ライブラリ
 

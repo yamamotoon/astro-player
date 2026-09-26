@@ -1,0 +1,124 @@
+/* 3D+2D画面（3D天球 / 2D方位図の切替、方位磁石ボタン） */
+
+/* 3D/2Dはトグルで排他表示（issue: モバイルで同時表示すると操作しづらいため） */
+.views {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+}
+
+.view-toggle {
+  display: flex;
+  flex-shrink: 0;
+  gap: 3px;
+  margin: 8px;
+  padding: 3px;
+  background: #0d0d2b;
+  border: 1px solid #2a2a4a;
+  border-radius: 8px;
+}
+
+/* 枠の中に並べる切替ボタンなので、ボタン自体の枠線はなし */
+.view-toggle-btn {
+  flex: 1;
+  border: none;
+  padding: 7px;
+  min-height: 40px;
+  font-size: 0.82rem;
+}
+
+.views .view-3d,
+.views .view-2d {
+  display: none;
+  flex: 1;
+  overflow: hidden;
+}
+
+.views .view-3d.active,
+.views .view-2d.active {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  position: relative;
+}
+
+#canvas3d {
+  flex: 1;
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.view-2d {
+  align-items: center;
+  justify-content: center;
+  padding: 12px;
+}
+
+#canvas2d {
+  width: min(70vh, 90vw, 420px);
+  height: min(70vh, 90vw, 420px);
+}
+
+/* コンパスFAB: Googleマップのコンパスに倣い、他の操作ボタンから独立した
+   単独の円形ボタンとして右下に配置。ONの間は針が実際のデバイス方位に回転する */
+.compass-fab {
+  position: absolute;
+  right: max(12px, env(safe-area-inset-right));
+  bottom: max(12px, env(safe-area-inset-bottom));
+  z-index: 1;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.compass-fab-icon {
+  width: 26px;
+  height: 26px;
+  transition: transform 0.15s ease-out;
+}
+
+.compass-fab-ring {
+  fill: none;
+  stroke: #3a4a70;
+  stroke-width: 1;
+}
+
+.compass-fab-tick {
+  fill: #4a5a80;
+}
+
+.compass-fab-needle-n {
+  fill: #e6392e;
+}
+
+.compass-fab-needle-s {
+  fill: #c8d0e0;
+}
+
+.compass-fab-pivot {
+  fill: #0d0d2b;
+  stroke: #c8d0e0;
+  stroke-width: 0.6;
+}
+
+.compass-fab.active .compass-fab-ring {
+  stroke: #5070a0;
+}
+
+.compass-fab.active .compass-fab-tick {
+  fill: #7090c0;
+}
+
+@media (orientation: landscape) and (max-height: 500px) {
+  #canvas2d {
+    width: min(50vh, 60vw);
+    height: min(50vh, 60vw);
+  }
+}

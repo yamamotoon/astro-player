@@ -2,6 +2,7 @@ import * as THREE from 'three'
 import type { AstroData } from './astroCalc'
 import { t, getLang } from './i18n'
 import { positionToXYZ, raDecToAltAz, ZODIAC_CONSTELLATIONS, FAMOUS_CONSTELLATIONS } from './astroCalc'
+import './ar.css'
 
 const R = 9
 // 太陽・月の半径。実物の見かけの直径(約0.5°、R=9換算で半径≒0.04)のままだと星の点とほぼ同じ大きさで

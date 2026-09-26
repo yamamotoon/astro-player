@@ -1,0 +1,192 @@
+/* 時間バー（#scale-playback・#dashboard-playback・#sky-playbackで共通の見た目。画面下部固定・親指操作用） */
+
+.playback {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 16px;
+  padding-bottom: max(5px, env(safe-area-inset-bottom));
+  background: #0a0a24;
+  border-top: 1px solid #2a2a4a;
+  flex-shrink: 0;
+}
+
+/* 主役の操作なので、共通の見た目（.btn）より目立つ色の丸いボタンにする */
+.play-btn {
+  background: #1e3a6e;
+  border-color: #3a5a9e;
+  color: #a0c0ff;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  font-size: 0.95rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  padding: 0;
+  line-height: 1;
+}
+
+.play-btn:hover {
+  background: #2a4a8e;
+}
+
+.play-btn svg {
+  width: 18px;
+  height: 18px;
+}
+
+.seekbar-wrap {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.seekbar-track-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.seekbar {
+  flex: 1;
+  accent-color: #4070c0;
+  cursor: pointer;
+  height: 4px;
+}
+
+.scale-mode-toggle {
+  display: flex;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.scale-mode-btn {
+  font-size: 0.85rem;
+  padding: 8px 16px;
+  min-height: 40px;
+}
+
+/* NOWボタン: モードは変えず、シミュレーション時刻だけを現在時刻に戻す。
+   今すでにNOWと表示上一致している間は押しても意味がないため控えめな見た目にし、
+   時刻をずらして「今とは違う時刻を見ている」状態になった時だけ目立たせる
+   （.now-btn-active、simPlayback.ts参照） */
+.now-btn {
+  color: #5a6a90;
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 8px 14px;
+  min-height: 40px;
+  flex-shrink: 0;
+}
+
+.now-btn.now-btn-active {
+  border-color: #3a5a9e;
+  color: #a0c0ff;
+}
+
+.scale-seekbar-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #a0c0ff;
+  white-space: nowrap;
+  padding: 0 2px;
+  text-align: center;
+}
+
+/* モード切替・ステップ再生・シークバーの3段構成 */
+#scale-playback,
+#dashboard-playback,
+#sky-playback {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+}
+
+.scale-playback-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.scale-playback-row:last-of-type {
+  justify-content: center;
+}
+
+.scale-step-group {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+/* display:flexの指定がUA標準の[hidden]{display:none}をカスケードで上書きしてしまい、
+   hidden属性だけではA/B切り替えが効かなくなるため明示的に上書きする */
+.scale-step-group[hidden] {
+  display: none;
+}
+
+.step-btn {
+  padding: 8px 9px;
+  min-height: 40px;
+  min-width: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.step-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+.step-btn:hover {
+  color: #a0c0ff;
+}
+
+@media (max-width: 600px) {
+  .playback {
+    padding: 5px 10px;
+    gap: 8px;
+  }
+
+  .scale-step-group {
+    gap: 3px;
+  }
+}
+
+@media (orientation: landscape) and (max-height: 500px) {
+  .playback {
+    padding: 4px 12px;
+    gap: 8px;
+  }
+
+  /* 縦向きは3段（モード切替／ステップ+再生／シークバー）だが、横向きは縦の余裕がない代わりに
+     横は十分広い。ボタンを小さくして押しにくくするのではなく、.scale-playback-row(2つ)を
+     display:contentsにして中身を#scale-playback/#dashboard-playback/#sky-playback自身の
+     flexアイテムとして直接並べ、幅が許す限り1行にまとめる（入りきらなければ自然に折り返すだけ
+     なので、極端に狭い端末でも崩れはしない）。シークバーは常に単独の行にする */
+  #scale-playback,
+  #dashboard-playback,
+  #sky-playback {
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: center;
+    row-gap: 2px;
+    column-gap: 10px;
+    padding: 3px 12px;
+    padding-bottom: max(3px, env(safe-area-inset-bottom));
+  }
+
+  .scale-playback-row {
+    display: contents;
+  }
+
+  .seekbar-wrap {
+    flex-basis: 100%;
+  }
+}

@@ -1,0 +1,134 @@
+/* 設定パネル（#scene-hud。メニュー以外の全シーン共通の1インスタンス） */
+
+/* 情報過多を避けるため既定で折りたたみ。開閉は#toggle-controlsボタンで操作する */
+.controls {
+  display: flex;
+  gap: 16px;
+  padding: 6px 16px;
+  background: #0d0d2b;
+  border-bottom: 1px solid #2a2a4a;
+  align-items: center;
+  flex-wrap: wrap;
+  flex-shrink: 0;
+  overflow: hidden;
+  max-height: 220px;
+  transition: max-height 0.25s ease, padding 0.25s ease;
+}
+
+.controls.collapsed {
+  max-height: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
+.control-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.control-group > label {
+  font-size: 0.8rem;
+  color: #7080a0;
+  white-space: nowrap;
+}
+
+.location-inputs {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.location-inputs span {
+  font-size: 0.78rem;
+  color: #7080a0;
+}
+
+input[type="number"],
+input[type="datetime-local"] {
+  background: #12122e;
+  border: 1px solid #2a2a4a;
+  color: #d0d0e8;
+  padding: 3px 7px;
+  border-radius: 4px;
+  font-size: 0.82rem;
+}
+
+input[type="number"] {
+  width: 96px;
+}
+
+.locate-btn {
+  color: #a0c0ff;
+  padding: 3px 10px;
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+
+.locate-btn:disabled {
+  color: #5a6680;
+  cursor: default;
+}
+
+.realtime-label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.8rem;
+  color: #7080a0;
+  cursor: pointer;
+}
+
+@media (max-width: 600px) {
+  .controls {
+    padding: 6px 12px;
+  }
+
+  .control-group {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  input[type="number"] {
+    width: 80px;
+    font-size: 0.9rem;
+    padding: 5px 6px;
+  }
+
+  input[type="datetime-local"] {
+    font-size: 0.9rem;
+    padding: 5px 6px;
+  }
+
+  .realtime-label {
+    font-size: 0.85rem;
+  }
+}
+
+@media (orientation: landscape) and (max-height: 500px) {
+  .controls {
+    padding: 5px 12px;
+    flex-wrap: wrap;
+  }
+
+  .control-group {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  input[type="number"] {
+    width: 80px;
+    font-size: 0.9rem;
+    padding: 4px 6px;
+  }
+
+  input[type="datetime-local"] {
+    font-size: 0.9rem;
+    padding: 4px 6px;
+  }
+
+  .realtime-label {
+    font-size: 0.82rem;
+  }
+}

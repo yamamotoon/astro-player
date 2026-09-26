@@ -1,0 +1,177 @@
+/* アプリ全体の土台（リセット・レイアウト・ヘッダー）と、全画面で使う部品（ボタン）。
+   各画面の見た目は、その画面のTSと同じ名前のCSSに書き、そのTSからimportする */
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+/* ---- ボタン共通 ----
+   すべてのボタンに.btnを付け、個別のクラスには大きさ・配置・文字色などそのボタンだけの違いを書く。
+   画面（3Dのcanvas等）の上に重ねるボタンには.btn-floatも付け、下が透けない不透明な背景と影にする。
+   選択中の状態は.activeで表す */
+.btn {
+  background: transparent;
+  border: 1px solid #2a2a4a;
+  border-radius: 6px;
+  color: #7080a0;
+  cursor: pointer;
+}
+
+.btn:hover {
+  background: #1a2a4a;
+}
+
+.btn.active {
+  background: #2a3a6e;
+  border-color: #3a5a9e;
+  color: #a0c0ff;
+}
+
+.btn-float {
+  background: #12122e;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+}
+
+body {
+  font-family: 'Segoe UI', sans-serif;
+  background: #05051a;
+  color: #d0d0e8;
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-height: 0;
+}
+
+header {
+  padding: 8px max(16px, env(safe-area-inset-right)) 8px max(16px, env(safe-area-inset-left));
+  padding-top: max(8px, env(safe-area-inset-top));
+  background: #0d0d2b;
+  border-bottom: 1px solid #2a2a4a;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+header h1 {
+  flex: 1;
+  min-width: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #a0c0ff;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.back-btn {
+  flex-shrink: 0;
+  color: #a0c0ff;
+  width: 40px;
+  height: 40px;
+  font-size: 1.1rem;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.back-btn[hidden] {
+  display: none;
+}
+
+/* アイコンボタン: src/icons/*.svgをmain.tsのsetIcon()でinnerHTML注入して使う。
+   fill/stroke="currentColor"にしているので、ボタンのcolorプロパティで色を制御できる。
+   SVGファイル自体にはclassを持たせず、挿入先ボタンの子セレクタでサイズを指定する */
+.back-btn svg,
+.toggle-controls svg {
+  width: 20px;
+  height: 20px;
+}
+
+.lang-btn {
+  color: #a0b0e0;
+  padding: 3px 10px;
+  min-height: 40px;
+  font-size: 0.75rem;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+}
+
+.lang-btn:hover {
+  color: #c0d0ff;
+}
+
+.toggle-controls {
+  width: 40px;
+  height: 40px;
+  font-size: 1.1rem;
+  line-height: 1;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.toggle-controls[hidden] {
+  display: none;
+}
+
+/* ---- モバイル対応 (portrait / 幅600px以下) ---- */
+@media (max-width: 600px) {
+  body {
+    height: auto;
+    min-height: 100dvh;
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+
+  header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 12px;
+  }
+
+  header h1 {
+    font-size: 0.82rem;
+  }
+}
+
+/* ---- モバイル横向き (landscape on phone: 幅>600px かつ 高さ<=500px) ---- */
+@media (orientation: landscape) and (max-height: 500px) {
+  /* bodyの高さは基準(height:100dvh; overflow:hidden)のまま変えない。auto+overflow-y:autoに
+     緩めると、main{flex:1; overflow:hidden}によるviewport内への収まりが効かなくなり、
+     はみ出た分がスクロールで隠れてしまう（＝スケールモデル/SKYのような全画面3D/AR表示では
+     スクロールという概念自体が成立せず、実質「操作できないボタンが画面外に消える」不具合になる）。
+     ここでは各シーン側のレイアウトを縮めて確実にviewport内へ収める方針にする */
+
+  header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 4px 12px;
+  }
+
+  header h1 {
+    font-size: 0.82rem;
+  }
+}

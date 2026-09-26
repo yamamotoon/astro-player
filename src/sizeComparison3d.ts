@@ -1,6 +1,8 @@
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { t } from './i18n'
+import './scaleScene.css'
+import './sizeComparison3d.css'
 import { setIcon } from './iconInjector'
 import frameAllIconSvg from './icons/frame-all.svg?raw'
 import earthTextureUrl from './assets/earth-texture.png'
@@ -383,6 +385,7 @@ export class SizeComparison3D {
     }
     const makeItem = (group: HTMLElement, text: string, color: string | null, onSelect: () => void) => {
       const btn = document.createElement('button')
+      btn.className = 'btn'
       if (color) {
         const dot = document.createElement('span')
         dot.className = 'body-dot'
