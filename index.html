@@ -5,16 +5,16 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <link rel="icon" type="image/svg+xml" href="/astro-player/favicon.svg">
   <title>天空プレイヤー - 太陽・月位置シミュレーター</title>
-  <script type="module" crossorigin src="/astro-player/assets/index-Ck7JkYuG.js"></script>
-  <link rel="stylesheet" crossorigin href="/astro-player/assets/index-CAPAKnkw.css">
+  <script type="module" crossorigin src="/astro-player/assets/index-CqwXauGt.js"></script>
+  <link rel="stylesheet" crossorigin href="/astro-player/assets/index-DewiheE5.css">
 </head>
 <body>
   <header>
-    <button id="back-to-menu-btn" class="back-btn" aria-label="メニューに戻る" data-i18n-aria-label="nav-back" hidden></button>
+    <button id="back-to-menu-btn" class="btn back-btn" aria-label="メニューに戻る" data-i18n-aria-label="nav-back" hidden></button>
     <h1 id="header-title">天空プレイヤー</h1>
     <div class="header-actions">
-      <button id="lang-btn" class="lang-btn">EN</button>
-      <button id="toggle-controls" class="toggle-controls" aria-expanded="false" aria-label="設定を開閉" data-i18n-aria-label="toggle-aria" hidden></button>
+      <button id="lang-btn" class="btn lang-btn">EN</button>
+      <button id="toggle-controls" class="btn toggle-controls" aria-expanded="false" aria-label="設定を開閉" data-i18n-aria-label="toggle-aria" hidden></button>
     </div>
   </header>
 
@@ -58,7 +58,7 @@
             <input type="number" id="lat" value="35.6762" step="0.0001" min="-90" max="90">
             <span data-i18n="lng">経度</span>
             <input type="number" id="lng" value="139.6503" step="0.0001" min="-180" max="180">
-            <button id="locate-btn" class="locate-btn" data-i18n="locate-btn">現在地</button>
+            <button id="locate-btn" class="btn locate-btn" data-i18n="locate-btn">現在地</button>
           </div>
         </div>
         <div class="control-group">
@@ -80,8 +80,8 @@
         <div id="scale-display-group" class="control-group">
           <label data-i18n="scale-display">表示</label>
           <div class="scale-mode-toggle" role="group">
-            <button id="scale-deform-real-btn" class="scale-mode-btn" data-i18n="scale-deform-real">実比率</button>
-            <button id="scale-deform-deform-btn" class="scale-mode-btn" data-i18n="scale-deform-deform">見やすく</button>
+            <button id="scale-deform-real-btn" class="btn scale-deform-btn" data-i18n="scale-deform-real">実比率</button>
+            <button id="scale-deform-deform-btn" class="btn scale-deform-btn" data-i18n="scale-deform-deform">見やすく</button>
           </div>
         </div>
       </section>
@@ -90,11 +90,11 @@
     <!-- 3D+2D シーン -->
     <section id="scene-dashboard" class="views" style="display: none">
       <div class="view-toggle" role="group" aria-label="3D/2D表示切替">
-        <button id="view-toggle-3d" class="view-toggle-btn" data-view="3d" data-i18n="view-3d">3D 天球</button>
-        <button id="view-toggle-2d" class="view-toggle-btn" data-view="2d" data-i18n="view-2d">2D 方位図</button>
+        <button id="view-toggle-3d" class="btn view-toggle-btn" data-view="3d" data-i18n="view-3d">3D 天球</button>
+        <button id="view-toggle-2d" class="btn view-toggle-btn" data-view="2d" data-i18n="view-2d">2D 方位図</button>
       </div>
       <div class="view-3d">
-        <button id="compass-toggle-3d" class="compass-fab" title="デバイスの向きに合わせる" data-i18n-title="compass-toggle-title" aria-pressed="false">
+        <button id="compass-toggle-3d" class="btn btn-float compass-fab" title="デバイスの向きに合わせる" data-i18n-title="compass-toggle-title" aria-pressed="false">
           <svg viewBox="0 0 24 24" class="compass-fab-icon">
             <circle cx="12" cy="12" r="10.5" class="compass-fab-ring" />
             <circle cx="12" cy="4.2" r="0.6" class="compass-fab-tick" />
@@ -109,7 +109,7 @@
         <canvas id="canvas3d"></canvas>
       </div>
       <div class="view-2d">
-        <button id="compass-toggle-2d" class="compass-fab" title="デバイスの向きに合わせる" data-i18n-title="compass-toggle-title" aria-pressed="false">
+        <button id="compass-toggle-2d" class="btn btn-float compass-fab" title="デバイスの向きに合わせる" data-i18n-title="compass-toggle-title" aria-pressed="false">
           <svg viewBox="0 0 24 24" class="compass-fab-icon">
             <circle cx="12" cy="12" r="10.5" class="compass-fab-ring" />
             <circle cx="12" cy="4.2" r="0.6" class="compass-fab-tick" />
@@ -143,17 +143,17 @@
     <section id="scene-size" class="scale-view" style="display: none">
       <div class="scale-canvas-wrap">
         <div class="view-actions">
-          <button id="size-view-btn" class="scale-view-btn" data-i18n="scale-view-btn">視点</button>
-          <button id="size-fit-btn" class="icon-btn" title="全体を表示 (Home)" data-i18n-title="scale-fit-title"></button>
+          <button id="size-view-btn" class="btn btn-float scale-view-btn" data-i18n="scale-view-btn">視点</button>
+          <button id="size-fit-btn" class="btn btn-float icon-btn" title="全体を表示 (Home)" data-i18n-title="scale-fit-title"></button>
         </div>
         <canvas id="canvas-size"></canvas>
         <div id="size-labels" class="size-labels"></div>
-        <canvas id="size-orient-gizmo" class="size-orient-gizmo" width="96" height="96"></canvas>
+        <div id="size-orient-gizmo" class="size-orient-gizmo"><canvas id="size-orient-gizmo-canvas"></canvas></div>
       </div>
       <dialog id="size-view-dialog" class="scale-view-dialog">
         <div class="scale-view-dialog-header">
           <span data-i18n="scale-view-title">視点を選ぶ</span>
-          <button id="size-view-dialog-close" class="scale-view-dialog-close" aria-label="閉じる" data-i18n-aria-label="dialog-close">×</button>
+          <button id="size-view-dialog-close" class="btn scale-view-dialog-close" aria-label="閉じる" data-i18n-aria-label="dialog-close">×</button>
         </div>
         <div id="size-view-list"></div>
       </dialog>
@@ -163,30 +163,30 @@
     <section id="scene-scale" class="scale-view" style="display: none">
       <div class="scale-canvas-wrap">
         <div class="view-actions">
-          <button id="scale-view-btn" class="scale-view-btn" data-i18n="scale-view-btn">視点</button>
-          <button id="scale-fit-btn" class="icon-btn" title="全体を表示 (Home)" data-i18n-title="scale-fit-title"></button>
+          <button id="scale-view-btn" class="btn btn-float scale-view-btn" data-i18n="scale-view-btn">視点</button>
+          <button id="scale-fit-btn" class="btn btn-float icon-btn" title="全体を表示 (Home)" data-i18n-title="scale-fit-title"></button>
         </div>
         <canvas id="canvas-scale"></canvas>
         <pre id="scale-debug-hud" class="scale-debug-hud"></pre>
-        <canvas id="scale-angle-gizmo" class="scale-angle-gizmo" width="96" height="96"></canvas>
+        <canvas id="scale-angle-gizmo" class="scale-angle-gizmo"></canvas>
       </div>
       <!-- 視点を選ぶダイアログ -->
       <dialog id="scale-view-dialog" class="scale-view-dialog">
         <div class="scale-view-dialog-header">
           <span data-i18n="scale-view-title">視点を選ぶ</span>
-          <button id="scale-view-dialog-close" class="scale-view-dialog-close" aria-label="閉じる" data-i18n-aria-label="dialog-close">×</button>
+          <button id="scale-view-dialog-close" class="btn scale-view-dialog-close" aria-label="閉じる" data-i18n-aria-label="dialog-close">×</button>
         </div>
         <div class="scale-view-dialog-list">
-          <button data-body="earth" data-view="system"><span class="body-ring" style="--dot: #5b9bff"></span><span data-i18n="scale-view-moon-orbit">地球と月の軌道を見る</span></button>
-          <button data-body="sun" data-view="system"><span class="body-ring" style="--dot: #ffee44"></span><span data-i18n="scale-view-earth-orbit">地球の公転軌道を見る</span></button>
+          <button class="btn" data-body="earth" data-view="system"><span class="body-ring" style="--dot: #5b9bff"></span><span data-i18n="scale-view-moon-orbit">地球と月の軌道を見る</span></button>
+          <button class="btn" data-body="sun" data-view="system"><span class="body-ring" style="--dot: #ffee44"></span><span data-i18n="scale-view-earth-orbit">地球の公転軌道を見る</span></button>
         </div>
         <div class="scale-view-dialog-list">
-          <button data-body="sun" data-view="focus"><span class="body-dot" style="--dot: #ffee44"></span><span data-i18n="scale-view-focus-sun">太陽に寄る</span></button>
-          <button data-body="earth" data-view="focus"><span class="body-dot" style="--dot: #5b9bff"></span><span data-i18n="scale-view-focus-earth">地球に寄る</span></button>
-          <button data-body="moon" data-view="focus"><span class="body-dot" style="--dot: #ccd4ee"></span><span data-i18n="scale-view-focus-moon">月に寄る</span></button>
-          <button data-body="mercury" data-view="focus" data-inner-planet><span class="body-dot" style="--dot: #b8afa8"></span><span data-i18n="scale-view-focus-mercury">水星に寄る</span></button>
-          <button data-body="venus" data-view="focus" data-inner-planet><span class="body-dot" style="--dot: #e8d4a0"></span><span data-i18n="scale-view-focus-venus">金星に寄る</span></button>
-          <button data-body="mars" data-view="focus" data-inner-planet><span class="body-dot" style="--dot: #e08050"></span><span data-i18n="scale-view-focus-mars">火星に寄る</span></button>
+          <button class="btn" data-body="sun" data-view="focus"><span class="body-dot" style="--dot: #ffee44"></span><span data-i18n="scale-view-focus-sun">太陽に寄る</span></button>
+          <button class="btn" data-body="earth" data-view="focus"><span class="body-dot" style="--dot: #5b9bff"></span><span data-i18n="scale-view-focus-earth">地球に寄る</span></button>
+          <button class="btn" data-body="moon" data-view="focus"><span class="body-dot" style="--dot: #ccd4ee"></span><span data-i18n="scale-view-focus-moon">月に寄る</span></button>
+          <button class="btn" data-body="mercury" data-view="focus" data-inner-planet><span class="body-dot" style="--dot: #b8afa8"></span><span data-i18n="scale-view-focus-mercury">水星に寄る</span></button>
+          <button class="btn" data-body="venus" data-view="focus" data-inner-planet><span class="body-dot" style="--dot: #e8d4a0"></span><span data-i18n="scale-view-focus-venus">金星に寄る</span></button>
+          <button class="btn" data-body="mars" data-view="focus" data-inner-planet><span class="body-dot" style="--dot: #e08050"></span><span data-i18n="scale-view-focus-mars">火星に寄る</span></button>
         </div>
       </dialog>
     </section>
@@ -195,26 +195,26 @@
     <section id="scale-playback" class="playback" style="display: none">
       <div class="scale-playback-row">
         <div class="scale-mode-toggle" role="group" aria-label="時間モード">
-          <button id="scale-mode-day" class="scale-mode-btn" data-mode="day" data-i18n="scale-mode-day">日</button>
-          <button id="scale-mode-month" class="scale-mode-btn" data-mode="month" data-i18n="scale-mode-month">月</button>
-          <button id="scale-mode-year" class="scale-mode-btn" data-mode="year" data-i18n="scale-mode-year">年</button>
+          <button id="scale-mode-day" class="btn scale-mode-btn" data-mode="day" data-i18n="scale-mode-day">日</button>
+          <button id="scale-mode-month" class="btn scale-mode-btn" data-mode="month" data-i18n="scale-mode-month">月</button>
+          <button id="scale-mode-year" class="btn scale-mode-btn" data-mode="year" data-i18n="scale-mode-year">年</button>
         </div>
-        <button id="scale-now-btn" class="now-btn" title="現在時刻に戻す" data-i18n-title="now-title" data-i18n="now-btn">NOW</button>
+        <button id="scale-now-btn" class="btn now-btn" title="現在時刻に戻す" data-i18n-title="now-title" data-i18n="now-btn">NOW</button>
       </div>
       <div class="scale-playback-row">
         <!-- ステップ再生（issue-009）: 時/日/月の3段を常時表示し、シーク範囲に縛られず時刻そのものを移動する -->
         <div id="scale-step-back-b" class="scale-step-group">
-          <button class="step-btn" data-unit="month" data-dir="-1" title="1か月戻す"></button>
-          <button class="step-btn" data-unit="day" data-dir="-1" title="1日戻す"></button>
-          <button class="step-btn" data-unit="hour" data-dir="-1" title="1時間戻す"></button>
+          <button class="btn step-btn" data-unit="month" data-dir="-1" title="1か月戻す"></button>
+          <button class="btn step-btn" data-unit="day" data-dir="-1" title="1日戻す"></button>
+          <button class="btn step-btn" data-unit="hour" data-dir="-1" title="1時間戻す"></button>
         </div>
 
-        <button id="scale-play-btn" class="play-btn" title="再生/停止" data-i18n-title="play-title"></button>
+        <button id="scale-play-btn" class="btn play-btn" title="再生/停止" data-i18n-title="play-title"></button>
 
         <div id="scale-step-fwd-b" class="scale-step-group">
-          <button class="step-btn" data-unit="hour" data-dir="1" title="1時間進める"></button>
-          <button class="step-btn" data-unit="day" data-dir="1" title="1日進める"></button>
-          <button class="step-btn" data-unit="month" data-dir="1" title="1か月進める"></button>
+          <button class="btn step-btn" data-unit="hour" data-dir="1" title="1時間進める"></button>
+          <button class="btn step-btn" data-unit="day" data-dir="1" title="1日進める"></button>
+          <button class="btn step-btn" data-unit="month" data-dir="1" title="1か月進める"></button>
         </div>
       </div>
       <div class="seekbar-wrap">
@@ -229,25 +229,25 @@
     <section id="dashboard-playback" class="playback" style="display: none">
       <div class="scale-playback-row">
         <div class="scale-mode-toggle" role="group" aria-label="時間モード">
-          <button id="dashboard-mode-day" class="scale-mode-btn" data-mode="day" data-i18n="scale-mode-day">日</button>
-          <button id="dashboard-mode-month" class="scale-mode-btn" data-mode="month" data-i18n="scale-mode-month">月</button>
-          <button id="dashboard-mode-year" class="scale-mode-btn" data-mode="year" data-i18n="scale-mode-year">年</button>
+          <button id="dashboard-mode-day" class="btn scale-mode-btn" data-mode="day" data-i18n="scale-mode-day">日</button>
+          <button id="dashboard-mode-month" class="btn scale-mode-btn" data-mode="month" data-i18n="scale-mode-month">月</button>
+          <button id="dashboard-mode-year" class="btn scale-mode-btn" data-mode="year" data-i18n="scale-mode-year">年</button>
         </div>
-        <button id="dashboard-now-btn" class="now-btn" title="現在時刻に戻す" data-i18n-title="now-title" data-i18n="now-btn">NOW</button>
+        <button id="dashboard-now-btn" class="btn now-btn" title="現在時刻に戻す" data-i18n-title="now-title" data-i18n="now-btn">NOW</button>
       </div>
       <div class="scale-playback-row">
         <div id="dashboard-step-back-b" class="scale-step-group">
-          <button class="step-btn" data-unit="month" data-dir="-1" title="1か月戻す"></button>
-          <button class="step-btn" data-unit="day" data-dir="-1" title="1日戻す"></button>
-          <button class="step-btn" data-unit="hour" data-dir="-1" title="1時間戻す"></button>
+          <button class="btn step-btn" data-unit="month" data-dir="-1" title="1か月戻す"></button>
+          <button class="btn step-btn" data-unit="day" data-dir="-1" title="1日戻す"></button>
+          <button class="btn step-btn" data-unit="hour" data-dir="-1" title="1時間戻す"></button>
         </div>
 
-        <button id="dashboard-play-btn" class="play-btn" title="再生/停止" data-i18n-title="play-title"></button>
+        <button id="dashboard-play-btn" class="btn play-btn" title="再生/停止" data-i18n-title="play-title"></button>
 
         <div id="dashboard-step-fwd-b" class="scale-step-group">
-          <button class="step-btn" data-unit="hour" data-dir="1" title="1時間進める"></button>
-          <button class="step-btn" data-unit="day" data-dir="1" title="1日進める"></button>
-          <button class="step-btn" data-unit="month" data-dir="1" title="1か月進める"></button>
+          <button class="btn step-btn" data-unit="hour" data-dir="1" title="1時間進める"></button>
+          <button class="btn step-btn" data-unit="day" data-dir="1" title="1日進める"></button>
+          <button class="btn step-btn" data-unit="month" data-dir="1" title="1か月進める"></button>
         </div>
       </div>
       <div class="seekbar-wrap">
@@ -262,25 +262,25 @@
     <section id="sky-playback" class="playback" style="display: none">
       <div class="scale-playback-row">
         <div class="scale-mode-toggle" role="group" aria-label="時間モード">
-          <button id="sky-mode-day" class="scale-mode-btn" data-mode="day" data-i18n="scale-mode-day">日</button>
-          <button id="sky-mode-month" class="scale-mode-btn" data-mode="month" data-i18n="scale-mode-month">月</button>
-          <button id="sky-mode-year" class="scale-mode-btn" data-mode="year" data-i18n="scale-mode-year">年</button>
+          <button id="sky-mode-day" class="btn scale-mode-btn" data-mode="day" data-i18n="scale-mode-day">日</button>
+          <button id="sky-mode-month" class="btn scale-mode-btn" data-mode="month" data-i18n="scale-mode-month">月</button>
+          <button id="sky-mode-year" class="btn scale-mode-btn" data-mode="year" data-i18n="scale-mode-year">年</button>
         </div>
-        <button id="sky-now-btn" class="now-btn" title="現在時刻に戻す" data-i18n-title="now-title" data-i18n="now-btn">NOW</button>
+        <button id="sky-now-btn" class="btn now-btn" title="現在時刻に戻す" data-i18n-title="now-title" data-i18n="now-btn">NOW</button>
       </div>
       <div class="scale-playback-row">
         <div id="sky-step-back-b" class="scale-step-group">
-          <button class="step-btn" data-unit="month" data-dir="-1" title="1か月戻す"></button>
-          <button class="step-btn" data-unit="day" data-dir="-1" title="1日戻す"></button>
-          <button class="step-btn" data-unit="hour" data-dir="-1" title="1時間戻す"></button>
+          <button class="btn step-btn" data-unit="month" data-dir="-1" title="1か月戻す"></button>
+          <button class="btn step-btn" data-unit="day" data-dir="-1" title="1日戻す"></button>
+          <button class="btn step-btn" data-unit="hour" data-dir="-1" title="1時間戻す"></button>
         </div>
 
-        <button id="sky-play-btn" class="play-btn" title="再生/停止" data-i18n-title="play-title"></button>
+        <button id="sky-play-btn" class="btn play-btn" title="再生/停止" data-i18n-title="play-title"></button>
 
         <div id="sky-step-fwd-b" class="scale-step-group">
-          <button class="step-btn" data-unit="hour" data-dir="1" title="1時間進める"></button>
-          <button class="step-btn" data-unit="day" data-dir="1" title="1日進める"></button>
-          <button class="step-btn" data-unit="month" data-dir="1" title="1か月進める"></button>
+          <button class="btn step-btn" data-unit="hour" data-dir="1" title="1時間進める"></button>
+          <button class="btn step-btn" data-unit="day" data-dir="1" title="1日進める"></button>
+          <button class="btn step-btn" data-unit="month" data-dir="1" title="1か月進める"></button>
         </div>
       </div>
       <div class="seekbar-wrap">
