@@ -10,9 +10,13 @@ import venusTextureUrl from './assets/venus-texture.png'
 import marsTextureUrl from './assets/mars-texture.png'
 import jupiterTextureUrl from './assets/jupiter-texture.png'
 import saturnTextureUrl from './assets/saturn-texture.png'
+import saturnRingTextureUrl from './assets/saturn-ring-texture.png'
 import uranusTextureUrl from './assets/uranus-texture.png'
 import neptuneTextureUrl from './assets/neptune-texture.png'
 import plutoTextureUrl from './assets/pluto-texture.png'
+import { OrientationControl } from './orientationControl'
+import { OrientationGizmoView } from './orientationGizmoView'
+import { createGlobeGizmoModel } from './orientationGizmoModel'
 
 // 天体の大きさ比較ビュー（issue #013）。太陽系の天体を1列に並べ、大きさだけを実際の比率で見せる。
 // 距離は実際の値ではなく、見比べやすい一定の間隔で並べる。時間の要素は持たない（静止表示）。
@@ -28,7 +32,8 @@ interface SizeBody {
   color: number
   // テクスチャ画像。無い天体は color の単色に陰影を付けて描く。画像を用意したらここに足すだけでよい
   textureUrl?: string
-  ring?: { inner: number; outer: number; color: number }
+  // 輪のテクスチャは横方向が内側(inner)→外側(outer)の半径、透明度が輪の濃さ
+  ring?: { inner: number; outer: number; textureUrl: string }
 }
 
 const BODIES: Record<SizeBodyKey, SizeBody> = {
@@ -39,7 +44,7 @@ const BODIES: Record<SizeBodyKey, SizeBody> = {
   moon:    { key: 'moon',    radius: 1.7374,  color: 0xccd4ee, textureUrl: moonTextureUrl },
   mars:    { key: 'mars',    radius: 3.3895,  color: 0xc1440e, textureUrl: marsTextureUrl },
   jupiter: { key: 'jupiter', radius: 69.911,  color: 0xd9b38c, textureUrl: jupiterTextureUrl },
-  saturn:  { key: 'saturn',  radius: 58.232,  color: 0xe3cf9c, textureUrl: saturnTextureUrl, ring: { inner: 74.658, outer: 136.775, color: 0xcdbb8f } },
+  saturn:  { key: 'saturn',  radius: 58.232,  color: 0xe3cf9c, textureUrl: saturnTextureUrl, ring: { inner: 74.658, outer: 136.775, textureUrl: saturnRingTextureUrl } },
   uranus:  { key: 'uranus',  radius: 25.362,  color: 0x9fd8e0, textureUrl: uranusTextureUrl },
   neptune: { key: 'neptune', radius: 24.622,  color: 0x4f7fd9, textureUrl: neptuneTextureUrl },
   pluto:   { key: 'pluto',   radius: 1.1883,  color: 0xcdb9a5, textureUrl: plutoTextureUrl },
@@ -53,8 +58,9 @@ const DIALOG_KEYS: SizeBodyKey[] = ['sun', 'mercury', 'venus', 'earth', 'moon', 
 const GAP = 12 // 天体同士の間隔
 const MOON_GAP = 7 // 地球と月の間隔
 const SUN_EDGE_VISIBLE = 25 // 全体表示で見せる太陽の縁の幅
-// 土星の輪を真横(0度)ではなく少し傾けて見せる。輪の見かけの縦幅は外径×cos(この角度)
-const RING_TILT = THREE.MathUtils.degToRad(72)
+// 天体の向き（全天体共通。右下の座標軸で操作する）の初期値。北極を手前へ倒す角度で、0度だと赤道を
+// 真横から見る（土星の輪が線になる）
+const INITIAL_TILT_DEG = 18
 const FIT_MARGIN = 0.9 // 画面に収める時の余白（画面サイズに対する割合）
 
 // 陰影の付き方。平行光は太陽の方向から当て、環境光で影側も暗くなりすぎないようにする
@@ -80,6 +86,10 @@ export class SizeComparison3D {
   private rafId: number | null = null
   private cleanupFns: Array<() => void> = []
 
+  private bodyQuat = new THREE.Quaternion()
+  private gizmoView: OrientationGizmoView
+  private orientControl: OrientationControl
+
   private labelsLayer: HTMLElement
   private viewDialog = document.getElementById('size-view-dialog') as HTMLDialogElement
   private viewList = document.getElementById('size-view-list') as HTMLElement
@@ -103,6 +113,13 @@ export class SizeComparison3D {
     this.scene.add(this.light)
     this.scene.add(new THREE.AmbientLight(0xffffff, AMBIENT_LIGHT_INTENSITY))
     this.createBodies()
+
+    const gizmoCanvas = document.getElementById('size-orient-gizmo') as HTMLCanvasElement
+    this.gizmoView = new OrientationGizmoView(gizmoCanvas, createGlobeGizmoModel())
+    this.orientControl = new OrientationControl(gizmoCanvas, (q) => {
+      this.gizmoView.setOrientation(q)
+      this.applyOrientation(q)
+    }, { initialTiltDeg: INITIAL_TILT_DEG })
 
     this.labelsLayer = document.getElementById('size-labels') as HTMLElement
     this.createLabels()
@@ -139,13 +156,14 @@ export class SizeComparison3D {
         )
       const mesh = new THREE.Mesh(new THREE.SphereGeometry(body.radius, segments, segments * 3 / 4), material)
       if (body.ring) {
+        const ringTexture = loader.load(body.ring.textureUrl)
+        // 輪を浅い角度から見た時の、斜め方向のテクスチャのぼやけ（細い隙間が消える）を抑える
+        ringTexture.anisotropy = this.renderer.capabilities.getMaxAnisotropy()
         const ring = new THREE.Mesh(
-          new THREE.RingGeometry(body.ring.inner, body.ring.outer, 128),
-          new THREE.MeshLambertMaterial({
-            color: body.ring.color, side: THREE.DoubleSide, transparent: true, opacity: 0.85,
-          })
+          SizeComparison3D.makeRingGeometry(body.ring.inner, body.ring.outer),
+          new THREE.MeshLambertMaterial({ map: ringTexture, side: THREE.DoubleSide, transparent: true })
         )
-        ring.rotation.x = RING_TILT
+        ring.rotation.x = -Math.PI / 2 // RingGeometryはXY平面なので、本体の赤道面(XZ平面)に合わせる
         mesh.add(ring)
       }
       this.scene.add(mesh)
@@ -153,10 +171,53 @@ export class SizeComparison3D {
     }
   }
 
-  /** 画面上での天体の半分の幅・高さ（土星は輪を含む）。輪の長軸は常に画面の横方向 */
-  private static halfSize(body: SizeBody): { x: number; y: number } {
+  /**
+   * 輪の形状。RingGeometryのUVは平面に投影した座標なので、テクスチャの横方向が半径に沿うよう
+   * u = 内側0〜外側1 に付け替える
+   */
+  private static makeRingGeometry(inner: number, outer: number): THREE.RingGeometry {
+    const geometry = new THREE.RingGeometry(inner, outer, 128)
+    const pos = geometry.attributes.position
+    const uv = geometry.attributes.uv
+    for (let i = 0; i < pos.count; i++) {
+      const r = Math.hypot(pos.getX(i), pos.getY(i))
+      uv.setXY(i, (r - inner) / (outer - inner), 0.5)
+    }
+    return geometry
+  }
+
+  /**
+   * 座標軸で決めた向きを全天体に反映する。土星の輪の見かけの大きさが変わるため並べ直すが、
+   * 画面の中心付近に見ている天体が画面上で動かないよう、カメラもその天体のずれの分だけ動かす
+   */
+  private applyOrientation(q: THREE.Quaternion) {
+    this.bodyQuat.copy(q)
+    for (const mesh of Object.values(this.meshByKey)) mesh.quaternion.copy(q)
+    if (!this.orientation) return
+
+    const target = this.controls.target
+    const anchor = Object.values(this.meshByKey).reduce((a, b) =>
+      a.position.distanceTo(target) <= b.position.distanceTo(target) ? a : b)
+    const before = anchor.position.clone()
+    this.layout(this.orientation)
+    const delta = anchor.position.clone().sub(before)
+    target.add(delta)
+    this.camera.position.add(delta)
+    this.controls.update()
+  }
+
+  /**
+   * 画面上での天体の半分の幅・高さ（土星は輪を含む）。輪（半径outerの円）の画面上の半幅は、
+   * 輪の面の法線nの各方向成分から outer×√(1−n²) で求まる
+   */
+  private halfSize(body: SizeBody): { x: number; y: number } {
     if (!body.ring) return { x: body.radius, y: body.radius }
-    return { x: body.ring.outer, y: Math.max(body.radius, body.ring.outer * Math.cos(RING_TILT)) }
+    const n = new THREE.Vector3(0, 1, 0).applyQuaternion(this.bodyQuat)
+    const r = body.ring.outer
+    return {
+      x: Math.max(body.radius, r * Math.sqrt(Math.max(1 - n.x * n.x, 0))),
+      y: Math.max(body.radius, r * Math.sqrt(Math.max(1 - n.y * n.y, 0))),
+    }
   }
 
   /**
@@ -170,7 +231,7 @@ export class SizeComparison3D {
     const axis = horizontal ? new THREE.Vector3(1, 0, 0) : new THREE.Vector3(0, -1, 0)
     const cross = horizontal ? new THREE.Vector3(0, -1, 0) : new THREE.Vector3(1, 0, 0)
     const along = (body: SizeBody) => {
-      const half = SizeComparison3D.halfSize(body)
+      const half = this.halfSize(body)
       return horizontal ? half.x : half.y
     }
 
@@ -191,7 +252,7 @@ export class SizeComparison3D {
 
   private bodyBox(key: SizeBodyKey): Box {
     const p = this.meshByKey[key].position
-    const half = SizeComparison3D.halfSize(BODIES[key])
+    const half = this.halfSize(BODIES[key])
     return { minX: p.x - half.x, maxX: p.x + half.x, minY: p.y - half.y, maxY: p.y + half.y }
   }
 
@@ -280,7 +341,7 @@ export class SizeComparison3D {
         continue
       }
       const p = this.meshByKey[key].position
-      const half = SizeComparison3D.halfSize(BODIES[key])
+      const half = this.halfSize(BODIES[key])
       const { sx, sy } = toScreen(p.x, p.y)
       let transform: string
       if (key === 'moon') {
@@ -378,6 +439,8 @@ export class SizeComparison3D {
     for (const cleanup of this.cleanupFns) cleanup()
     this.cleanupFns = []
     this.controls.dispose()
+    this.orientControl.dispose()
+    this.gizmoView.dispose()
     this.scene.traverse(obj => {
       if (obj instanceof THREE.Mesh) {
         obj.geometry.dispose()

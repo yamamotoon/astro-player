@@ -615,6 +615,20 @@ input[type="number"] {
   text-shadow: none;
 }
 
+/* 天体の向きを操作する座標軸。ドラッグを受けるので、ページのスクロール・ズームを止める */
+.size-orient-gizmo {
+  position: absolute;
+  right: max(8px, env(safe-area-inset-right));
+  bottom: max(8px, env(safe-area-inset-bottom));
+  width: 96px;
+  height: 96px;
+  background: rgba(0, 0, 20, 0.45);
+  border: 1px solid #2a2a4a;
+  border-radius: 20px;
+  cursor: grab;
+  touch-action: none;
+}
+
 .scale-debug-hud {
   position: absolute;
   left: 8px;

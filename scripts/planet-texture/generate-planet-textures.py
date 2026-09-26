@@ -3,6 +3,7 @@
 正距円筒図法(1024x512)で描く。実写ではなく、ひと目でその天体と分かる特徴だけを描いた絵柄にしている。
 - 縞模様の天体（木星・土星・天王星・海王星・金星）: 緯度ごとの帯の色。境界を少し波打たせ、帯の中にも弱い濃淡を入れる
 - 岩石の天体（水星・火星・冥王星）: ノイズで地表の濃淡を作り、クレーター・暗い地域・極冠・ハート模様などを重ねる
+- 土星の輪: 正距円筒図法ではなく、横方向を輪の半径にした帯の画像(RGBA)
 
 Three.jsの球(SphereGeometry)では画像の経度-90°がカメラ正面に来る。正面から見せたい模様
 （木星の大赤斑・冥王星のハート模様など）はその付近に置く。
@@ -158,6 +159,59 @@ def generate_saturn():
     save('saturn', img)
 
 
+# 細かく作ってから RING_OUT_WIDTH へ平均して縮小する。細い隙間（エンケの間隙など）は消えずに
+# 「少し暗い」程度にならされ、帯の境目もなだらかになる
+RING_WIDTH, RING_OUT_WIDTH, RING_HEIGHT = 1024, 128, 16
+# sizeComparison3d.ts の土星の ring.inner / ring.outer（km）と揃える
+RING_INNER_KM, RING_OUTER_KM = 74658, 136775
+
+
+def generate_saturn_ring():
+    """土星の輪のテクスチャ(RGBA)。横方向が輪の内側(左端)→外側(右端)の半径、縦方向は同じ値の繰り返し。
+    透明度で輪の濃さ（C環は薄く、B環は濃く、隙間はほぼ透明）を表す"""
+    rng = np.random.default_rng(9)
+    r = RING_INNER_KM + (np.arange(RING_WIDTH) + 0.5) / RING_WIDTH * (RING_OUTER_KM - RING_INNER_KM)
+
+    # (内側の半径km, 外側の半径km, RGB, 不透明度)。隙間なく内側から並べる
+    zones = [
+        (74658, 92000, (120, 108, 92), 0.30),     # C環
+        (92000, 117580, (226, 208, 170), 0.95),   # B環
+        (117580, 122170, (110, 100, 88), 0.30),   # カッシーニの間隙（空洞ではなく薄い物質がある）
+        (122170, 133420, (196, 180, 148), 0.75),  # A環
+        (133420, 133745, (60, 52, 44), 0.05),     # エンケの間隙
+        (133745, 136775, (190, 174, 144), 0.70),  # A環（エンケの間隙より外側）
+    ]
+    color = np.zeros((RING_WIDTH, 3))
+    alpha = np.zeros(RING_WIDTH)
+    for inner, outer, c, a in zones:
+        mask = (r >= inner) & (r < outer)
+        color[mask] = c
+        alpha[mask] = a
+
+    # 環の中の細かい濃淡（多数の細い環の集まりに見えるように）
+    ripple = np.zeros(RING_WIDTH)
+    for _ in range(12):
+        period_km = rng.uniform(150, 2500)
+        ripple += np.sin(r / period_km * 2 * np.pi + rng.uniform(0, 2 * np.pi))
+    ripple /= 12
+    color *= (1 + ripple * 0.12)[:, None]
+    alpha *= 1 + ripple * 0.15
+
+    # RING_OUT_WIDTH へ平均して縮小する。色は不透明度で重み付けして平均する（ほぼ透明な隙間の
+    # 暗い色が、周りの帯の色を必要以上に暗くしないように）
+    alpha = np.clip(alpha, 0, 1)
+    group = RING_WIDTH // RING_OUT_WIDTH
+    alpha_sum = alpha.reshape(RING_OUT_WIDTH, group).sum(axis=1)
+    color = (color * alpha[:, None]).reshape(RING_OUT_WIDTH, group, 3).sum(axis=1) / np.maximum(alpha_sum, 1e-9)[:, None]
+    alpha = alpha_sum / group
+
+    row = np.concatenate([color, alpha[:, None] * 255], axis=-1)
+    img = np.clip(np.tile(row[None, :, :], (RING_HEIGHT, 1, 1)), 0, 255).astype(np.uint8)
+    out_path = os.path.join(OUT_DIR, 'saturn-ring-texture.png')
+    Image.fromarray(img, 'RGBA').save(out_path)
+    print(f'wrote {out_path} ({RING_OUT_WIDTH}x{RING_HEIGHT})')
+
+
 def generate_uranus():
     # ほぼ模様のない青緑色。ごく淡い縞と、少し明るい極域だけ
     bands = [
@@ -308,6 +362,7 @@ def main():
     generate_mars()
     generate_jupiter()
     generate_saturn()
+    generate_saturn_ring()
     generate_uranus()
     generate_neptune()
     generate_pluto()
