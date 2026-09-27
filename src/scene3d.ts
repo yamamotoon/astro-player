@@ -3,6 +3,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import type { AstroData, ConstellationDef, TriangleDef } from './astroCalc'
 import { positionToXYZ, raDecToAltAz, ZODIAC_CONSTELLATIONS, FAMOUS_CONSTELLATIONS, BIG_TRIANGLES } from './astroCalc'
 import { getLang } from './i18n'
+import moonTextureUrl from './assets/moon-texture.png'
 
 const R = 5 // celestial sphere radius
 
@@ -13,6 +14,7 @@ export class Scene3D {
   private controls: OrbitControls
   private sunMesh: THREE.Mesh
   private moonMesh: THREE.Mesh
+  private sunLight: THREE.DirectionalLight
   private sunLine: THREE.Line
   private moonLine: THREE.Line
   private rafId: number | null = null
@@ -62,10 +64,15 @@ export class Scene3D {
     this.sunMesh.add(new THREE.Mesh(glowGeo, glowMat))
 
     // Moon
-    const moonGeo = new THREE.SphereGeometry(0.13, 16, 16)
-    const moonMat = new THREE.MeshBasicMaterial({ color: 0xccccdd })
+    // 地球に向ける面(テクスチャの経度0=+X)を、lookAt()が対象に向ける+Zに合わせておく
+    const moonGeo = new THREE.SphereGeometry(0.13, 16, 16).rotateY(-Math.PI / 2)
+    const moonMat = new THREE.MeshLambertMaterial({ map: new THREE.TextureLoader().load(moonTextureUrl) })
     this.moonMesh = new THREE.Mesh(moonGeo, moonMat)
     this.scene.add(this.moonMesh)
+
+    // 太陽→中心(観測者)向きの光。照らされるのは月だけ（他はライトの影響を受けない材質）
+    this.sunLight = new THREE.DirectionalLight(0xffffff, 1.6)
+    this.scene.add(this.sunLight)
 
     // Direction lines
     this.sunLine = this.makeLine(0xffee44)
@@ -239,14 +246,16 @@ export class Scene3D {
     const [sx, sy, sz] = positionToXYZ(data.sun.azimuthRad, data.sun.altitudeRad, R)
     this.sunMesh.position.set(sx, sy, sz)
     this.setLine(this.sunLine, sx, sy, sz)
+    this.sunLight.position.set(sx, sy, sz)
     const sMat = this.sunMesh.material as THREE.MeshBasicMaterial
     sMat.opacity = data.sun.altitudeRad < 0 ? 0.25 : 1.0
     sMat.transparent = data.sun.altitudeRad < 0
 
     const [mx, my, mz] = positionToXYZ(data.moon.azimuthRad, data.moon.altitudeRad, R)
     this.moonMesh.position.set(mx, my, mz)
+    this.moonMesh.lookAt(0, 0, 0)
     this.setLine(this.moonLine, mx, my, mz)
-    const mMat = this.moonMesh.material as THREE.MeshBasicMaterial
+    const mMat = this.moonMesh.material as THREE.MeshLambertMaterial
     mMat.opacity = data.moon.altitudeRad < 0 ? 0.25 : 1.0
     mMat.transparent = data.moon.altitudeRad < 0
   }
