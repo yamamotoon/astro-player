@@ -3,6 +3,7 @@ import type { AstroData } from './astroCalc'
 import { t, getLang } from './i18n'
 import { positionToXYZ, raDecToAltAz, ZODIAC_CONSTELLATIONS, FAMOUS_CONSTELLATIONS } from './astroCalc'
 import './ar.css'
+import moonTextureUrl from './assets/moon-texture.png'
 
 const R = 9
 // 太陽・月の半径。実物の見かけの直径(約0.5°、R=9換算で半径≒0.04)のままだと星の点とほぼ同じ大きさで
@@ -18,6 +19,7 @@ export class ARView {
   private camera: THREE.PerspectiveCamera
   private sunMesh: THREE.Mesh
   private moonMesh: THREE.Mesh
+  private sunLight: THREE.DirectionalLight
   private sunLabel: THREE.Sprite
   private moonLabel: THREE.Sprite
   private constGroup: THREE.Group
@@ -55,7 +57,7 @@ export class ARView {
   constructor(canvas: HTMLCanvasElement) {
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true })
     this.renderer.setPixelRatio(window.devicePixelRatio)
-    this.renderer.setClearColor(0x02020f)
+    this.renderer.setClearColor(0x0b1a3a)
     this.scene = new THREE.Scene()
     this.camera = new THREE.PerspectiveCamera(60, 1, 0.1, 100)
     this.camera.position.set(0, 0, 0)
@@ -70,9 +72,15 @@ export class ARView {
     this.sunLabel = this.makeLabel(t('label-sun'), '#ffee44')
     this.scene.add(this.sunLabel)
 
-    const moonGeo = new THREE.SphereGeometry(SUN_MOON_RADIUS, 32, 24)
-    this.moonMesh = new THREE.Mesh(moonGeo, new THREE.MeshBasicMaterial({ color: 0xccd4ee }))
+    // 地球に向ける面(テクスチャの経度0=+X)を、lookAt()が対象に向ける+Zに合わせておく
+    const moonGeo = new THREE.SphereGeometry(SUN_MOON_RADIUS, 32, 24).rotateY(-Math.PI / 2)
+    const moonMat = new THREE.MeshLambertMaterial({ map: new THREE.TextureLoader().load(moonTextureUrl) })
+    this.moonMesh = new THREE.Mesh(moonGeo, moonMat)
     this.scene.add(this.moonMesh)
+
+    // 太陽→中心(観測者)向きの光。照らされるのは月だけ（他はライトの影響を受けない材質）
+    this.sunLight = new THREE.DirectionalLight(0xffffff, 1.6)
+    this.scene.add(this.sunLight)
     this.moonLabel = this.makeLabel(t('label-moon'), '#ccd4ee')
     this.scene.add(this.moonLabel)
 
@@ -198,14 +206,16 @@ export class ARView {
     const [sx, sy, sz] = positionToXYZ(data.sun.azimuthRad, data.sun.altitudeRad, R)
     this.sunMesh.position.set(sx, sy, sz)
     this.sunLabel.position.set(sx, sy + SUN_MOON_RADIUS + SUN_MOON_LABEL_GAP, sz)
+    this.sunLight.position.set(sx, sy, sz)
     const sm = this.sunMesh.material as THREE.MeshBasicMaterial
     sm.opacity = data.sun.altitudeRad < 0 ? 0.3 : 1.0
     sm.transparent = data.sun.altitudeRad < 0
 
     const [mx, my, mz] = positionToXYZ(data.moon.azimuthRad, data.moon.altitudeRad, R)
     this.moonMesh.position.set(mx, my, mz)
+    this.moonMesh.lookAt(0, 0, 0)
     this.moonLabel.position.set(mx, my + SUN_MOON_RADIUS + SUN_MOON_LABEL_GAP, mz)
-    const mm = this.moonMesh.material as THREE.MeshBasicMaterial
+    const mm = this.moonMesh.material as THREE.MeshLambertMaterial
     mm.opacity = data.moon.altitudeRad < 0 ? 0.3 : 1.0
     mm.transparent = data.moon.altitudeRad < 0
 
