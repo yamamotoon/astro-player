@@ -77,11 +77,11 @@ export const EARTH_MOON_DIST = EARTH_MOON_DIST_KM / MOON_RADIUS_KM
 export const EARTH_SUN_DIST = EARTH_SUN_DIST_KM / MOON_RADIUS_KM
 
 // ---- 内惑星（水星・金星・火星）。地球の公転ビューアのみでON/OFFする(ScaleModelConfig.
-// showInnerPlanets)実験的な追加。衛星を持たない前提（火星の衛星フォボス/ダイモスは省略）で、
-// 衛星の公転半径(scaleModel3d.tsのREAL_SATELLITE_ORBIT_RADIUS等)にもエントリを作らない ----
+// showInnerPlanets)。衛星は持たない前提（火星の衛星フォボス/ダイモスは省略） ----
 export type InnerPlanetKey = 'mercury' | 'venus' | 'mars'
 // 太陽に近い順（配置・ループの基準順）
 export const INNER_PLANET_KEYS: readonly InnerPlanetKey[] = ['mercury', 'venus', 'mars']
+export type BodyKey = 'sun' | InnerPlanetKey | 'earth' | 'moon'
 
 const MERCURY_RADIUS_KM = 2439.7
 const VENUS_RADIUS_KM = 6051.8
@@ -99,9 +99,6 @@ const MARS_SUN_DIST = MARS_SUN_DIST_KM / MOON_RADIUS_KM
 
 // 公転周期(日)。地球のみdayOfYearFraction()（暦年基準、周期≒365.25日限定の簡略計算）を使うため、
 // 他の惑星はこの日数を使う専用の角度計算(orbitalAngleFromEpoch())を別途用意している
-export const REAL_INNER_PLANET_DIST: Record<InnerPlanetKey, number> = {
-  mercury: MERCURY_SUN_DIST, venus: VENUS_SUN_DIST, mars: MARS_SUN_DIST,
-}
 export const INNER_PLANET_ORBIT_DAYS: Record<InnerPlanetKey, number> = {
   mercury: 87.969, venus: 224.701, mars: 686.980,
 }
@@ -111,29 +108,44 @@ export const INNER_PLANET_SPIN_DAYS: Record<InnerPlanetKey, number> = {
   mercury: 58.646, venus: -243.025, mars: 1.025957,
 }
 
-// ---- デフォルメモード（issue #007。実験的）----
-// 実際の相対サイズ比(約109:1)のままだと「認識できる大きさ」と「重ならない」が両立しないため、
-// デフォルメ時は太陽・地球・月を全て同じ半径にする。距離は「表面間のギャップ」から逆算することで
-// (中心間距離 = 半径×2 + ギャップ)、ギャップ>0である限り構造的に重なりようがない。
-// 距離の比率(太陽〜地球 / 地球〜月)は、月の満ち欠け（太陽→地球方向を共用するDirectionalLightの
-// 近似）にわずかな誤差を生むが、学習用途では無視できるレベルのため「見やすさ」を優先して決める
-// （詳細はdocs/issue-007-scale-model-deform-mode.md参照）
-export const DEFORM_BODY_R = 10
-const DEFORM_EARTH_MOON_GAP = 3 * DEFORM_BODY_R
-const DEFORM_SUN_EARTH_GAP = 8 * DEFORM_BODY_R
-export const DEFORM_EARTH_MOON_DIST = 2 * DEFORM_BODY_R + DEFORM_EARTH_MOON_GAP
-export const DEFORM_SUN_EARTH_DIST = 2 * DEFORM_BODY_R + DEFORM_SUN_EARTH_GAP
+// ---- 配置パターン（実比率 / 見やすく） ----
+export type PlanetKey = InnerPlanetKey | 'earth'
+// 太陽に近い順
+const PLANET_KEYS: readonly PlanetKey[] = ['mercury', 'venus', 'earth', 'mars']
 
-// 内惑星のデフォルメ距離。既存のDEFORM_SUN_EARTH_DIST(=100)は変えない(既存3画面の見た目を
-// 変えないため)。水星・金星はその内側、火星は外側に、隣り合うリングの中心間距離が
-// 常に2*DEFORM_BODY_R(=20)以上空くように配置し、太陽・惑星同士がリング半径の差だけでは
-// 重ならないようにする。ただし月は地球を中心に別途EARTH_MOON_DISTぶん動くため、月と
-// 水星/金星/火星が特定の角度でごく稀に接近する可能性はこの計算だけでは排除できない
-// （3天体(太陽・地球・月)だけを対象にしたissue #007の重なり回避保証は、6天体には及ばない
-// 実験的な拡張であることの注記）
-export const DEFORM_INNER_PLANET_DIST: Record<InnerPlanetKey, number> = {
-  mercury: 40, venus: 70, mars: 170,
+export interface Layout {
+  radius: Record<BodyKey, number>
+  /** 太陽の中心〜惑星の中心 */
+  sunDist: Record<PlanetKey, number>
+  /** 地球の中心〜月の中心 */
+  moonOrbit: number
 }
+
+export const REAL_LAYOUT: Layout = {
+  radius: { sun: SUN_R, mercury: MERCURY_R, venus: VENUS_R, earth: EARTH_R, mars: MARS_R, moon: MOON_R },
+  sunDist: { mercury: MERCURY_SUN_DIST, venus: VENUS_SUN_DIST, earth: EARTH_SUN_DIST, mars: MARS_SUN_DIST },
+  moonOrbit: EARTH_MOON_DIST,
+}
+
+// 半径と、太陽側のとなりの天体とのすき間から配置を作る（すき間>0なら天体どうしは重ならない）。
+// 地球は月の公転範囲の外側を端とする
+function layoutFromGaps(radius: Record<BodyKey, number>, gap: Record<PlanetKey, number>, moonOrbit: number): Layout {
+  const reach = (key: PlanetKey) => (key === 'earth' ? moonOrbit + radius.moon : radius[key])
+  const sunDist = {} as Record<PlanetKey, number>
+  let edge = radius.sun
+  for (const key of PLANET_KEYS) {
+    sunDist[key] = edge + gap[key] + reach(key)
+    edge = sunDist[key] + reach(key)
+  }
+  return { radius, sunDist, moonOrbit }
+}
+
+// 長さは地球の半径=10の単位
+export const DEFORM_LAYOUT = layoutFromGaps(
+  { sun: 20, mercury: 6, venus: 9.7, earth: 10, mars: 7.1, moon: 5 },
+  { mercury: 61, venus: 42, earth: 5, mars: 44 },
+  25,
+)
 
 // 太陽を原点（この系で唯一動かない基準点）、Y=公転面(黄道面=XZ平面)の法線。
 // 地球・月・内惑星の位置は円軌道で簡略化した公転運動により、毎フレームcomputeOrbitalPositions()が
@@ -172,12 +184,12 @@ export const MOON_SPIN_AXIS = new THREE.Vector3(0, 1, 0)
  * (scaleModel3d.tsのsyncSceneToOrbitalState())が別途反映する）。
  * 地球の公転角度は年内の経過日数から、月の公転角度は実際の月相(SunCalcの実測値。新月=0で
  * 地球と太陽の間、満月=0.5で太陽の反対側)を基準にしている。
- * デフォルメモード（issue #007）中は、実際の距離ではなくDEFORM_*_DISTを使う。角度の計算式は
- * 変えないため、月の公転角度(=満ち欠けの形)はどちらのモードでも常に正確なまま
+ * 距離はlayoutのものを使う。角度の計算式は配置パターンによらないため、月の公転角度(=満ち欠けの形)は
+ * 常に正確なまま
  */
-export function computeOrbitalPositions(date: Date, deformMode: boolean): number {
-  const sunEarthDist = deformMode ? DEFORM_SUN_EARTH_DIST : EARTH_SUN_DIST
-  const earthMoonDist = deformMode ? DEFORM_EARTH_MOON_DIST : EARTH_MOON_DIST
+export function computeOrbitalPositions(date: Date, layout: Layout): number {
+  const sunEarthDist = layout.sunDist.earth
+  const earthMoonDist = layout.moonOrbit
 
   // Z成分の符号を反転させて(cosθ, -sinθ)にすることで、+Y(北)から見て反時計回り
   // （実際の公転方向。地球の自転と同じ向き）になるようにしている。単純な(cosθ, sinθ)は
@@ -198,7 +210,7 @@ export function computeOrbitalPositions(date: Date, deformMode: boolean): number
   // 内惑星（非表示中でも位置自体は常に計算しておく。表示切替した瞬間にも正しい位置になっている
   // 必要があるため。表示するかどうかはscaleModel3d.ts側の関心事）
   for (const key of INNER_PLANET_KEYS) {
-    const dist = deformMode ? DEFORM_INNER_PLANET_DIST[key] : REAL_INNER_PLANET_DIST[key]
+    const dist = layout.sunDist[key]
     const angle = orbitalAngleFromEpoch(date, INNER_PLANET_ORBIT_DAYS[key])
     INNER_PLANET_POS[key].set(Math.cos(angle) * dist, 0, -Math.sin(angle) * dist)
   }

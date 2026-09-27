@@ -12,11 +12,10 @@ import { createSimPlaybackController, type SimMode, type SimPlaybackController }
 import { setIcon } from './iconInjector'
 import {
   dayOfYearFraction, orbitalAngleFromEpoch, subsolarLonRad, localDirForLon, localDirForLatLon,
-  computeOrbitalPositions, type InnerPlanetKey, INNER_PLANET_KEYS,
+  computeOrbitalPositions, type InnerPlanetKey, type BodyKey, INNER_PLANET_KEYS,
   MOON_R, EARTH_R, SUN_R, MERCURY_R, VENUS_R, MARS_R,
   EARTH_MOON_DIST, EARTH_SUN_DIST,
-  DEFORM_BODY_R, DEFORM_EARTH_MOON_DIST, DEFORM_SUN_EARTH_DIST,
-  REAL_INNER_PLANET_DIST, DEFORM_INNER_PLANET_DIST, INNER_PLANET_ORBIT_DAYS, INNER_PLANET_SPIN_DAYS,
+  type Layout, REAL_LAYOUT, DEFORM_LAYOUT, INNER_PLANET_ORBIT_DAYS, INNER_PLANET_SPIN_DAYS,
   SUN_POS, EARTH_POS, MOON_POS, INNER_PLANET_POS,
   EARTH_AXIS, MOON_SPIN_AXIS, MOON_ORBIT_TILT_QUAT,
 } from './orbitalMath'
@@ -28,23 +27,9 @@ const MARKER_RADIUS = 0.6
 // 太陽光の陰影を若干だけ付けるための自己発光の強さ（0〜1）。大きいほど陰影が弱く、夜側でも明るく見える
 const MARKER_EMISSIVE_INTENSITY = 0.7
 
-type BodyKey = 'sun' | InnerPlanetKey | 'earth' | 'moon'
 // 表示/非表示に関わらず全天体。scale適用など「見えているかは関係なく全部そろえておきたい」処理で使う
 // （表示対象を絞るactiveBodyKeys()とは目的が違うので取り違えないよう別名にしている）
 const ALL_BODY_KEYS: BodyKey[] = ['sun', 'mercury', 'venus', 'earth', 'mars', 'moon']
-
-// 視点ダイアログの「軌道を見る」で使う、その天体の衛星の公転半径。今日の実際の衛星の位置ではなく
-// 公転半径そのものを使うことで、衛星が軌道上のどこにいても画面外に出ない、日付に依存しない距離に
-// なる。衛星を持たない天体にはエントリが無い。デフォルメモード（issue #007）
-// では実際の距離ではなくデフォルメ後の距離を使う必要があるため、実寸/デフォルメの2セットを用意する
-const REAL_SATELLITE_ORBIT_RADIUS: Partial<Record<BodyKey, number>> = {
-  sun: EARTH_SUN_DIST,
-  earth: EARTH_MOON_DIST,
-}
-const DEFORM_SATELLITE_ORBIT_RADIUS: Partial<Record<BodyKey, number>> = {
-  sun: DEFORM_SUN_EARTH_DIST,
-  earth: DEFORM_EARTH_MOON_DIST,
-}
 
 // 各モード（既存の「スケール」／地球の公転ビューア／地球の自転ビューア）は独立させ、
 // 同時に複数インスタンスを存在させない前提にする（呼び出し側がモード切替のたびに
@@ -140,10 +125,7 @@ export class ScaleModel3D {
   // 動かさず、視点ダイアログ・全体表示・ショートカットキーでカメラを動かす
   private targetBody: BodyKey = 'sun'
 
-  // デフォルメモード（issue #007。実験的）: 太陽・地球・月を全て同じ半径(DEFORM_BODY_R)にし、
-  // 距離もDEFORM_EARTH_MOON_DIST/DEFORM_SUN_EARTH_DISTに置き換える単純な2状態トグル。
-  // 実寸⇔デフォルメの切替のみで、中間の倍率は持たない（過去の連続スライダー案は撤去。
-  // backup/deform-distance-scale-wipブランチ参照）
+  // デフォルメモード（「見やすく」表示）: 実寸(REAL_LAYOUT)⇔デフォルメ(DEFORM_LAYOUT)の2状態トグル
   private deformMode = false
   private locationMarker: THREE.Mesh
 
@@ -161,7 +143,6 @@ export class ScaleModel3D {
   // キー付きで天体を引けるようにするルックアップ（当たり判定・選択・フォーカスで使う）
   private meshByKey!: Record<BodyKey, THREE.Mesh>
   private posByKey!: Record<BodyKey, THREE.Vector3>
-  private radiusByKey!: Record<BodyKey, number>
   private labelMaps!: Record<BodyKey, { normal: THREE.Texture; selected: THREE.Texture }>
   // 選択中の天体を示す輪郭（本体をわずかに拡大し裏面だけ描画する殻。本体のテクスチャ/マテリアルには
   // 一切触れないので見た目が変わらない）
@@ -174,8 +155,7 @@ export class ScaleModel3D {
 
   // 内惑星（水星・金星・火星）専用のメッシュ・軌道円ルックアップ。showInnerPlanets=falseの時は
   // 常に3つとも存在はするが.visible=falseで非表示にする（activeBodyKeys()もこのキーを含めない）。
-  // REAL_INNER_PLANET_DIST/DEFORM_INNER_PLANET_DIST/INNER_PLANET_ORBIT_DAYS/INNER_PLANET_POSは
-  // 物理量なのでorbitalMath.tsが持つ（このクラスはimportして使うだけ）
+  // 距離・公転周期・位置などの物理量はorbitalMath.tsが持つ（このクラスはimportして使うだけ）
   private innerPlanetMeshByKey: Partial<Record<BodyKey, THREE.Mesh>> = {}
   private innerPlanetOrbitLineByKey: Partial<Record<BodyKey, THREE.LineLoop>> = {}
 
@@ -206,7 +186,7 @@ export class ScaleModel3D {
 
     // カメラの初期位置がEARTH_POSを参照するため、メッシュ等を作る前に一度、実際の現在時刻
     // (currentSimDateValue、フィールド初期化子で既に設定済み)に基づく公転位置を計算しておく
-    computeOrbitalPositions(this.currentSimDate(), this.deformMode)
+    computeOrbitalPositions(this.currentSimDate(), this.layout)
 
     this.renderer.setClearColor(0x05051a)
 
@@ -326,7 +306,7 @@ export class ScaleModel3D {
       this.innerPlanetMeshByKey[key] = mesh
 
       const orbitLine = this.makeOrbitLine(0x6a86b8)
-      orbitLine.scale.setScalar(this.deformMode ? DEFORM_INNER_PLANET_DIST[key] : REAL_INNER_PLANET_DIST[key])
+      orbitLine.scale.setScalar(this.layout.sunDist[key])
       orbitLine.visible = this.showInnerPlanets
       this.scene.add(orbitLine)
       this.innerPlanetOrbitLineByKey[key] = orbitLine
@@ -336,10 +316,9 @@ export class ScaleModel3D {
     // 計算してくれるため、地球だけでなく水星・金星・火星もそれぞれ正しい向きで照らされる。
     // 元々はSun→Earth方向のDirectionalLight（平行光線）1本を地球・月で共用していたが、
     // 内惑星は地球とは全く違う方向・距離にいるため、この近似では影の付き方が破綻していた。
-    // decay:0（距離減衰なし）にしているのは、このアプリが実寸(太陽〜地球=86,125)とデフォルメ
-    // (同=100)で距離が3桁違うため、既定の距離減衰(2乗に反比例)だと片方の縮尺で明るすぎる/
-    // 暗すぎるになってしまうのを避けるため（今までのDirectionalLightと同じ「距離に関係なく
-    // 一定の明るさ」を保つ）
+    // decay:0（距離減衰なし）にしているのは、実寸とデフォルメで距離が桁違いに違うため、
+    // 既定の距離減衰(2乗に反比例)だと片方の縮尺で明るすぎる/暗すぎるになってしまうのを
+    // 避けるため（距離に関係なく一定の明るさを保つ）
     const sunLight = new THREE.PointLight(0xffffff, 1.6, 0, 0)
     sunLight.position.copy(SUN_POS)
     this.scene.add(sunLight)
@@ -403,10 +382,6 @@ export class ScaleModel3D {
     this.posByKey = {
       sun: SUN_POS, earth: EARTH_POS, moon: MOON_POS,
       mercury: INNER_PLANET_POS.mercury, venus: INNER_PLANET_POS.venus, mars: INNER_PLANET_POS.mars,
-    }
-    this.radiusByKey = {
-      sun: SUN_R, earth: EARTH_R, moon: MOON_R,
-      mercury: MERCURY_R, venus: VENUS_R, mars: MARS_R,
     }
     // config.deformDefault=trueで起動した場合、ここでメッシュのscale・カメラの最小ズーム距離を
     // 最初から合わせておく（setDeformMode()参照。実寸起動時はscale=1になるだけで無害）
@@ -729,9 +704,9 @@ export class ScaleModel3D {
 
     // 衛星の公転ルート。earthOrbitLineは太陽(原点)中心で固定なので位置は変えず半径だけ更新する。
     // moonOrbitLineは地球を追って毎フレーム再配置する（地球自身が公転で動くため）
-    this.earthOrbitLine.scale.setScalar(this.deformMode ? DEFORM_SUN_EARTH_DIST : EARTH_SUN_DIST)
+    this.earthOrbitLine.scale.setScalar(this.layout.sunDist.earth)
     this.moonOrbitLine.position.copy(EARTH_POS)
-    this.moonOrbitLine.scale.setScalar(this.deformMode ? DEFORM_EARTH_MOON_DIST : EARTH_MOON_DIST)
+    this.moonOrbitLine.scale.setScalar(this.layout.moonOrbit)
 
     // 内惑星: 位置とその軌道円の半径を毎フレーム反映する（showInnerPlanets=falseでも非表示なだけで
     // 位置計算・同期自体は続ける。表示切替した瞬間に正しい位置になっている必要があるため）
@@ -739,9 +714,7 @@ export class ScaleModel3D {
       this.innerPlanetMeshByKey[key]!.position.copy(INNER_PLANET_POS[key])
       // 自転: 時刻から角度を決める（Y軸周りの正の回転＝北から見て反時計回り＝順行）
       this.innerPlanetMeshByKey[key]!.rotation.y = orbitalAngleFromEpoch(this.currentSimDate(), INNER_PLANET_SPIN_DAYS[key])
-      this.innerPlanetOrbitLineByKey[key]!.scale.setScalar(
-        this.deformMode ? DEFORM_INNER_PLANET_DIST[key] : REAL_INNER_PLANET_DIST[key]
-      )
+      this.innerPlanetOrbitLineByKey[key]!.scale.setScalar(this.layout.sunDist[key])
     }
 
     // 月は自転周期=公転周期(潮汐固定)で、常に同じ面(テクスチャの経度0=実写で地球側だった面)を
@@ -845,13 +818,17 @@ export class ScaleModel3D {
     this.focusOn(this.posByKey[this.targetBody], this.displayRadius(this.targetBody))
   }
 
+  private get layout(): Layout {
+    return this.deformMode ? DEFORM_LAYOUT : REAL_LAYOUT
+  }
+
   /**
-   * 天体の「見た目の」半径。デフォルメモード中は全天体が同じDEFORM_BODY_Rになっているため、
-   * フィット計算・ラベル当たり判定など「画面上どれだけの大きさに見えるか」を基準にする箇所では
-   * radiusByKey（実寸半径）ではなくこちらを使う
+   * 天体の「見た目の」半径。メッシュは実寸半径(REAL_LAYOUT)で作り、デフォルメ中はscaleで拡大して
+   * いるため、フィット計算・ラベル当たり判定など「画面上どれだけの大きさに見えるか」を基準にする
+   * 箇所ではこちらを使う
    */
   private displayRadius(key: BodyKey): number {
-    return this.deformMode ? DEFORM_BODY_R : this.radiusByKey[key]
+    return this.layout.radius[key]
   }
 
   /**
@@ -871,10 +848,8 @@ export class ScaleModel3D {
   }
 
   /**
-   * デフォルメモード（issue #007。実験的）の切り替え。太陽・地球・月を全て同じ見た目の半径
-   * (DEFORM_BODY_R)にする。天体ごとに実際の半径が異なるため、各メッシュに掛けるscale倍率は
-   * それぞれ別の値になる（DEFORM_BODY_R / 実際の半径）。距離はcomputeOrbitalPositions()側が
-   * this.deformModeを見て別の距離定数に切り替える（本メソッドでは位置の再計算は行わないが、
+   * デフォルメモードの切り替え。各メッシュのscale倍率は 見た目の半径 / 実寸半径。距離は
+   * computeOrbitalPositions()にthis.layoutを渡して切り替える（本メソッドでは位置の再計算は行わないが、
    * 毎フレームの描画ループが次フレームで自動的に反映する）。
    * 輪郭殻(outlineByKey)は本体メッシュの子オブジェクトのため、親のscaleにより見た目の拡大は
    * 自動的に追従する（updateLabels()側で輪郭線の太さだけ補正が必要。該当箇所のコメント参照）
@@ -885,8 +860,8 @@ export class ScaleModel3D {
     this.applyDeformVisuals()
     this.updateDeformButtonUI()
 
-    // 実寸⇔デフォルメで距離のスケールが大きく変わる（例: 地球〜月間は実寸221.3→デフォルメ50）ため、
-    // カメラを動かさないままだと収まり方がおかしくなる。「軌道を見る」と同じ計算
+    // 実寸⇔デフォルメで距離のスケールが大きく変わるため、カメラを動かさないままだと
+    // 収まり方がおかしくなる。「軌道を見る」と同じ計算
     // (focusOnSystemView())で対象の系がちょうど収まる距離に再フィットする
     this.focusOnSystemView()
   }
@@ -898,11 +873,11 @@ export class ScaleModel3D {
    */
   private applyDeformVisuals() {
     for (const key of ALL_BODY_KEYS) {
-      const scale = this.deformMode ? DEFORM_BODY_R / this.radiusByKey[key] : 1
+      const scale = this.displayRadius(key) / REAL_LAYOUT.radius[key]
       this.meshByKey[key].scale.setScalar(scale)
     }
-    this.earthAxisLine.scale.setScalar(this.deformMode ? DEFORM_BODY_R / EARTH_R : 1)
-    this.controls.minDistance = (this.deformMode ? DEFORM_BODY_R : MOON_R) * 3
+    this.earthAxisLine.scale.setScalar(this.displayRadius('earth') / EARTH_R)
+    this.controls.minDistance = this.displayRadius('moon') * 3
   }
 
   private updateDeformButtonUI() {
@@ -917,8 +892,10 @@ export class ScaleModel3D {
    * （frameAll()と同じ考え方）。衛星を持たない天体では何もしない
    */
   private focusOnSystemView() {
-    const orbitRadii = this.deformMode ? DEFORM_SATELLITE_ORBIT_RADIUS : REAL_SATELLITE_ORBIT_RADIUS
-    const orbitRadius = orbitRadii[this.targetBody]
+    // 今日の衛星の位置ではなく公転半径を使うことで、衛星が軌道上のどこにいても画面外に出ない
+    const orbitRadius = this.targetBody === 'sun' ? this.layout.sunDist.earth
+      : this.targetBody === 'earth' ? this.layout.moonOrbit
+      : undefined
     if (orbitRadius === undefined) return
     const distance = Math.max(this.frameDistanceForOrbit(orbitRadius, 1.15), this.controls.minDistance)
     this.moveCameraTo(this.posByKey[this.targetBody], distance)
@@ -1264,11 +1241,11 @@ export class ScaleModel3D {
       outline.visible = s.key === this.targetBody
       if (outline.visible) {
         // 殻は本体メッシュの子オブジェクトなので、このscaleは親のローカル空間(=実寸半径)基準。
-        // デフォルメモード中は親のmesh.scaleが既にDEFORM_BODY_R/実寸半径倍されているため、ここは
-        // 常に実寸半径(radiusByKey)を使い、はみ出し量の項だけ親の拡大率で割って打ち消しておく
+        // デフォルメモード中は親のmesh.scaleが既に見た目の半径/実寸半径倍されているため、ここは
+        // 常に実寸半径を使い、はみ出し量の項だけ親の拡大率で割って打ち消しておく
         // （そうしないと輪郭の太さ自体が親と一緒に拡大されて見えてしまう）
-        const bodyRadius = this.radiusByKey[s.key]
-        const parentScale = this.deformMode ? DEFORM_BODY_R / bodyRadius : 1
+        const bodyRadius = REAL_LAYOUT.radius[s.key]
+        const parentScale = this.displayRadius(s.key) / bodyRadius
         const desiredRadius = bodyRadius + (s.depth * pxToTan(ScaleModel3D.OUTLINE_THICKNESS_PX)) / parentScale
         outline.scale.setScalar(desiredRadius / bodyRadius)
       }
@@ -1392,7 +1369,7 @@ export class ScaleModel3D {
       // 時間の進行自体はsimPlaybackController(simPlayback.ts)が独自のrAFループで管理しており、
       // currentSimDateValueはそのonDateChangeコールバックで更新される（constructor参照）。
       // ここでは毎フレーム、その時点の値を使って天体の姿勢を再計算するだけでよい
-      const earthOrbitAngle = computeOrbitalPositions(this.currentSimDate(), this.deformMode)
+      const earthOrbitAngle = computeOrbitalPositions(this.currentSimDate(), this.layout)
       this.syncSceneToOrbitalState(earthOrbitAngle)
       this.updateCameraTracking()
       this.controls.update()

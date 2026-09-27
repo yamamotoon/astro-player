@@ -19,3 +19,4 @@
 | [014](issue-014-sky-sun-moon-size.md) | SKYモードの太陽・月を大きく表示する | 実装・確認済み |
 | [015](issue-015-3d-compass-needle-follows-camera.md) | 3Dのコンパスボタンの針をカメラの向きに連動させる | 実装済み。動作確認待ち |
 | [016](issue-016-size-body-orientation-gizmo.md) | 「スケール」画面で天体の向きを操作できるようにする | 実装・確認済み |
+| [017](issue-017-deform-layout-moon-clearance.md) | 「見やすく」表示で月の軌道が他の惑星の軌道と交差しないようにする | 実装・確認済み |
