@@ -32,19 +32,22 @@ A web application that simulates the real-time positions of the sun, moon, and c
 
 ## 技術スタック / Tech Stack
 
-| パッケージ | Version | 用途 |
-|---|---|---|
-| [Vite](https://vitejs.dev/) | 5.x | ビルドツール・開発サーバー |
-| [TypeScript](https://www.typescriptlang.org/) | 5.x | 型安全な開発 |
-| [Three.js](https://threejs.org/) | 0.163 | 3D 天球レンダリング |
-| [SunCalc](https://github.com/mourner/suncalc) | 1.9 | 太陽・月の位置計算 |
+バージョンは `package.json` を参照。  
+See `package.json` for versions.
+
+| パッケージ | 用途 |
+|---|---|
+| [Vite](https://vitejs.dev/) | ビルドツール・開発サーバー |
+| [TypeScript](https://www.typescriptlang.org/) | 型安全な開発 |
+| [Three.js](https://threejs.org/) | 3D 天球レンダリング |
+| [SunCalc](https://github.com/mourner/suncalc) | 太陽・月の位置計算 |
 
 ---
 
 ## セットアップ / Getting Started
 
 ```bash
-git clone https://github.com/shinichiroy/astro-player.git
+git clone https://github.com/yamamotoon/astro-player.git
 cd astro-player
 npm install
 npm run dev
